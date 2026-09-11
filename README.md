@@ -71,9 +71,9 @@ Every route below requires `Authorization: Bearer <token>` — see [DEPLOYMENT.m
 |---|---|---|---|
 | `GET` | `/users`, `/users/{id}` | Any valid token | Look up users |
 | `GET` | `/products`, `/products/{id}` | Any valid token | Look up products and prices |
-| `POST` | `/orders` | Any valid token | Create an order (always returns `201`, status starts `PENDING`) |
-| `GET` | `/orders/{id}` | Any valid token | Get one order — poll this to watch status settle |
-| `GET` | `/users/{id}/orders` | Any valid token | Order history for a user |
+| `POST` | `/orders` | Any valid token | Create an order for the caller (identity from the token, not the request body) |
+| `GET` | `/orders/{id}` | Only the order's owner | Get one order — poll this to watch status settle; `403` if it isn't yours |
+| `GET` | `/orders/mine` | Any valid token | The caller's own order history |
 | `GET` | `/stock`, `/stock/{id}` | Any valid token | Live stock levels |
 | `POST` | `/stock/{id}/restock` | Token must carry the `admin` group | Record a stock delivery |
 
@@ -84,7 +84,8 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full provisioning walkthrough (RDS, E
 ## Known limitations
 
 - No tests.
-- No self-service signup flow or frontend — test users are created via the Cognito CLI (see DEPLOYMENT.md); tokens are fetched directly from Cognito's API, not a browser login.
+- No self-service signup flow — Cognito users are still created via the CLI (see DEPLOYMENT.md), not a real registration form. A `frontend/` (React + Vite) does exist, talking to the Gateway directly, no BFF.
+- A Cognito identity's first order auto-creates its `app_user` row with placeholder email/name (the access token carries no profile info) — a real signup flow would populate these properly instead.
 - Stock reservation has no locking — a narrow race is possible under real concurrent load.
 - No Payment or Notification service yet (deliberately out of scope so far).
 - No CI/CD — deploys are manual (`git clone` / file transfer + `docker compose up` on the EC2 instance).

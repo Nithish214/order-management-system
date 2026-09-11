@@ -26,6 +26,12 @@ public class AppUser {
     @Column(nullable = false)
     private String name;
 
+    // Links this row to a Cognito identity via its "sub" claim (permanent, immutable,
+    // unique per user -- the OIDC-standard identifier, unlike email which can change).
+    // Null for rows never created through Cognito (the original Alice/Bob seed data).
+    @Column(name = "cognito_sub", unique = true)
+    private String cognitoSub;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Order> orders = new ArrayList<>();
 }

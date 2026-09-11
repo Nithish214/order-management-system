@@ -36,7 +36,12 @@ public class SecurityConfig {
                 // protect -- CSRF protection exists for cookie-based sessions, not Bearer tokens.
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
-                        // Most specific rule first: restock additionally requires the "admin" group.
+                        // CORS preflight requests never carry the Authorization header -- that's by
+                        // design, the browser hasn't been told it's allowed to send it yet. Requiring
+                        // auth on OPTIONS would reject every preflight, which silently blocks the real
+                        // request too, since the browser never proceeds past a failed preflight.
+                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Most specific rule next: restock additionally requires the "admin" group.
                         // hasAuthority checks for the exact "ROLE_admin" authority our converter below
                         // produces from the token's cognito:groups claim.
                         .pathMatchers(HttpMethod.POST, "/stock/*/restock").hasAuthority("ROLE_admin")

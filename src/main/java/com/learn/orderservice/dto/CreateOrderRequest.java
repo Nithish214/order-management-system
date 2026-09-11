@@ -12,8 +12,10 @@ import java.util.List;
 @Setter
 public class CreateOrderRequest {
 
-    @NotNull(message = "userId is required")
-    private Long userId;
+    // No userId field, deliberately: who's placing the order comes from the X-User-Sub
+    // header the Gateway sets from the caller's own validated JWT (see OrderController),
+    // never from client-supplied JSON -- otherwise any authenticated caller could place
+    // an order as anyone else just by changing this field.
 
     @NotNull(message = "items are required")
     @Valid

@@ -3,6 +3,7 @@ package com.learn.orderservice.controller;
 import com.learn.orderservice.dto.CreateOrderRequest;
 import com.learn.orderservice.dto.OrderResponse;
 import com.learn.orderservice.entity.*;
+import com.learn.orderservice.exception.ForbiddenException;
 import com.learn.orderservice.repository.*;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
@@ -38,9 +39,16 @@ public class OrderController {
 
     @PostMapping("/orders")
     @Transactional
-    public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
-        AppUser user = appUserRepository.findById(request.getUserId())
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + request.getUserId()));
+    public ResponseEntity<OrderResponse> createOrder(
+            @Valid @RequestBody CreateOrderRequest request,
+            // Set by the Gateway's UserIdentityHeaderFilter from the caller's own validated JWT --
+            // this service never sees a raw token, just this one trusted header. Missing entirely
+            // means something bypassed the Gateway or the filter broke, so failing loudly (a 400,
+            // via Spring's default handling of a required header) is correct here, not a fallback.
+            @RequestHeader("X-User-Sub") String cognitoSub
+    ) {
+        AppUser user = appUserRepository.findByCognitoSub(cognitoSub)
+                .orElseGet(() -> createUserForCognitoSub(cognitoSub));
 
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Order must contain at least one item");
@@ -96,24 +104,56 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(OrderResponse.from(savedOrder));
     }
 
+    // The first order ever placed by a given Cognito identity creates its app_user row on
+    // the spot -- there's no separate signup step yet. email/name are placeholders: the
+    // access token's "sub" claim carries no profile info (name, real email) at all, only
+    // the ID token does, and we deliberately don't send that to APIs (see Phase 4 notes).
+    // A real signup flow would populate these properly instead of synthesizing them.
+    private AppUser createUserForCognitoSub(String cognitoSub) {
+        AppUser user = new AppUser();
+        user.setCognitoSub(cognitoSub);
+        user.setEmail(cognitoSub + "@cognito.local");
+        user.setName("Cognito User");
+        return appUserRepository.save(user);
+    }
+
     @GetMapping("/orders/{id}")
     @Transactional(readOnly = true)
-    public ResponseEntity<OrderResponse> getOrder(@PathVariable Long id) {
+    public ResponseEntity<OrderResponse> getOrder(
+            @PathVariable Long id,
+            @RequestHeader("X-User-Sub") String cognitoSub
+    ) {
         Order order = orderRepository.findByIdWithUserAndItems(id)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found: " + id));
+
+        // Ownership check: this order existing isn't enough -- it has to be *yours*. Without
+        // this, any authenticated caller could read any order just by guessing/incrementing
+        // the id in the URL, regardless of who actually placed it.
+        boolean isOwner = appUserRepository.findByCognitoSub(cognitoSub)
+                .map(caller -> caller.getId().equals(order.getUser().getId()))
+                .orElse(false);
+        if (!isOwner) {
+            throw new ForbiddenException("Order " + id + " does not belong to you");
+        }
+
         return ResponseEntity.ok(OrderResponse.from(order));
     }
 
-    @GetMapping("/users/{id}/orders")
+    // The history page's actual endpoint: identity comes from the same trusted header as
+    // order creation, never from a path parameter a client could swap out to see someone
+    // else's orders. (An earlier GET /users/{id}/orders took an arbitrary path id instead --
+    // removed entirely once ownership checks made it purely redundant with this endpoint.)
+    @GetMapping("/orders/mine")
     @Transactional(readOnly = true)
-    public ResponseEntity<List<OrderResponse>> getUserOrders(@PathVariable("id") Long userId) {
-        appUserRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
-
-        List<OrderResponse> responses = orderRepository.findAllByUserIdWithUserAndItems(userId)
-                .stream()
-                .map(OrderResponse::from)
-                .toList();
+    public ResponseEntity<List<OrderResponse>> getMyOrders(@RequestHeader("X-User-Sub") String cognitoSub) {
+        // A Cognito identity that has never placed an order has no app_user row at all yet
+        // (see createUserForCognitoSub) -- that's a normal "no history", not an error.
+        List<OrderResponse> responses = appUserRepository.findByCognitoSub(cognitoSub)
+                .map(user -> orderRepository.findAllByUserIdWithUserAndItems(user.getId())
+                        .stream()
+                        .map(OrderResponse::from)
+                        .toList())
+                .orElse(List.of());
         return ResponseEntity.ok(responses);
     }
 
