@@ -1,0 +1,48 @@
+version: '3.9'
+
+services:
+  oracle:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: order-oracle
+    ports:
+      - "1521:1521"
+      - "5500:5500"
+    environment:
+      ORACLE_PASSWORD: admin123
+      APP_USER: app_user
+      APP_USER_PASSWORD: app_password
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+      - ./docker/oracle-init:/container-entrypoint-initdb.d/startup
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'echo > /dev/tcp/127.0.0.1/1521' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: order-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft mode: Kafka manages its own metadata and leader election itself (a Raft
+      # consensus quorum formed by nodes acting as "controllers"), instead of relying on
+      # an external Zookeeper ensemble -- one less moving piece to run and operate.
+      # Single-node here, so this one broker plays both the broker and controller roles.
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+
+volumes:
+  oracle_data:

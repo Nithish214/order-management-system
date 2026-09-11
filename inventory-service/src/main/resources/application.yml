@@ -1,0 +1,35 @@
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: jdbc:oracle:thin:@//localhost:1521/XEPDB1
+    username: ${DB_USERNAME:inventory_user}
+    password: ${DB_PASSWORD:inventory_password}
+    driver-class-name: oracle.jdbc.OracleDriver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.OracleDialect
+        format_sql: true
+        show_sql: false
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: inventory-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+logging:
+  level:
+    org.hibernate.SQL: INFO

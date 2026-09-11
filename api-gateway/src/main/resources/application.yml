@@ -1,0 +1,62 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      # The frontend only ever needs to know about this one base URL (http://localhost:8080).
+      # Each route below picks a request apart by its path prefix and forwards it to whichever
+      # backend service actually owns that data -- the frontend never needs to know that
+      # "orders" and "stock" live in two entirely different services on two different ports.
+      # order.service.url / inventory.service.url default to localhost for local dev (where
+      # every service runs directly on the host, each on its own port) but are overridden by
+      # the ORDER_SERVICE_URL / INVENTORY_SERVICE_URL env vars in docker-compose.prod.yml --
+      # inside Docker Compose, containers reach each other by service name, not "localhost"
+      # (each container has its own network namespace; "localhost" there means itself).
+      routes:
+        - id: order-service-orders
+          uri: ${order.service.url:http://localhost:8081}
+          predicates:
+            - Path=/orders/**
+
+        - id: order-service-users
+          uri: ${order.service.url:http://localhost:8081}
+          predicates:
+            - Path=/users/**
+
+        - id: order-service-products
+          uri: ${order.service.url:http://localhost:8081}
+          predicates:
+            - Path=/products/**
+
+        # GET-only, deliberately: /stock/{id}/restock is an internal/admin operation (a warehouse
+        # system recording a delivery), not something a customer-facing frontend should ever call.
+        # Multiple predicates on one route are AND'd together, so this matches reads only -- a POST
+        # to /stock/**/restock won't match any route here and gets a plain 404 from the Gateway.
+        # It's still reachable directly on Inventory Service's own port, same as a real deployment
+        # would keep that port off the public internet, reachable only internally.
+        - id: inventory-service-stock-read
+          uri: ${inventory.service.url:http://localhost:8082}
+          predicates:
+            - Path=/stock/**
+            - Method=GET
+
+      # CORS lives here, once, instead of being duplicated on every backend service -- the
+      # browser only ever talks to this gateway directly, so this is the only place it matters.
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO

@@ -1,0 +1,15 @@
+target/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+*.log
+
+# RDS credentials for the deployed environment (docker-compose.prod.yml reads these) --
+# lives only on the EC2 instance, never committed. See DEPLOYMENT.md.
+.env
+*.pem
+
+# Your actual AWS resource IDs / local key path for scripts/start-all.ps1 and stop-all.ps1
+# -- copy scripts/config.example.ps1 to scripts/config.ps1 and fill in your own values.
+scripts/config.ps1
