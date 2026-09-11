@@ -335,3 +335,62 @@ Add to the EC2 instance's `.env` (alongside the RDS credentials):
 COGNITO_ISSUER_URI=https://cognito-idp.<region>.amazonaws.com/<user-pool-id>
 ```
 Then `docker compose -f docker-compose.prod.yml up -d --build api-gateway`.
+
+---
+
+# Phase 5 — Frontend hosting (S3 + CloudFront)
+
+The React app (`frontend/`) is a static build (Vite outputs plain HTML/CSS/JS — no
+server-side rendering), so it doesn't need EC2 or a container. It's hosted on S3 +
+CloudFront instead: cheaper than another EC2 instance, and gets HTTPS + a CDN for free.
+
+## Why S3 + CloudFront over EC2
+
+- **Cost**: S3 storage for a ~270KB build is fractions of a cent; CloudFront's free
+  tier (1TB/month data transfer out, 10M requests) comfortably covers a learning
+  project. A second EC2 instance would eat further into the same combined free-tier
+  hours budget the backend instance already uses (see the Phase 3 cost breakdown).
+- **HTTPS out of the box**: CloudFront gives you a `*.cloudfront.net` HTTPS endpoint
+  automatically. Getting HTTPS onto a bare EC2 instance means running your own TLS
+  terminator (Caddy/nginx) and managing certificates yourself.
+- **No server to keep patched or restart**: it's just files behind a CDN — nothing to
+  crash, no JVM/Node process to babysit.
+
+## How it's set up
+
+- **S3 bucket** (`order-management-frontend-<account-id>`) — all public access
+  blocked. It is *not* a public website bucket; only CloudFront can read from it.
+- **CloudFront Origin Access Control (OAC)** — the modern replacement for the older
+  "Origin Access Identity." Lets CloudFront authenticate to S3 with its own identity,
+  so the bucket can stay fully private.
+- **Bucket policy** — grants `s3:GetObject` to the `cloudfront.amazonaws.com` service
+  principal, scoped with a `AWS:SourceArn` condition to this specific distribution's
+  ARN (not "any CloudFront distribution in the account").
+- **CustomErrorResponses mapping 403 and 404 → `/index.html` (200)** — the key bit of
+  config that makes client-side routing work. React Router handles a URL like
+  `/orders/5` entirely in the browser; there's no real `orders/5` object in S3, so
+  without this rewrite, refreshing that page (or opening it directly) would 404. With
+  it, CloudFront serves `index.html` instead, letting React Router take over and render
+  the right page.
+
+## Redeploying after the backend IP changes
+
+`frontend/.env`'s `VITE_GATEWAY_URL` is baked into the JS bundle at **build time**
+(Vite inlines `import.meta.env.*` — there's no runtime config file to edit after the
+fact). Since the EC2 instance doesn't have an Elastic IP (see the cost breakdown above —
+an idle Elastic IP bills hourly), every stop/start cycle gives it a new public IP, which
+means the frontend needs a full rebuild + republish, not just a config tweak.
+
+`scripts/deploy-frontend.ps1` automates this: looks up the current EC2 IP, rewrites
+`.env`, runs `npm run build`, syncs `dist/` to S3, and creates a CloudFront invalidation
+(without this last step, CloudFront would keep serving the previous cached build for up
+to a day). Run it after `start-all.ps1` any time the EC2 instance has been restarted.
+
+## Known limitation: mixed content
+
+The frontend is served over HTTPS (via CloudFront) but talks to the backend Gateway
+over plain HTTP (`http://<ec2-ip>:8080`) — there's no TLS on the Gateway yet. Most
+browsers block this as mixed content on an HTTPS page. Fixing it properly means adding
+HTTPS to the Gateway itself (a TLS terminator in front of it, or a load balancer),
+which hasn't been done yet since it adds either cost (ALB) or complexity (self-managed
+certs on a single EC2 instance) beyond what this phase covers.
