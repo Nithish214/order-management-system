@@ -34,7 +34,7 @@ cloud deployment — rather than just reading about them.
 
 | Service | Folder | Port | Role |
 |---|---|---|---|
-| **API Gateway** | `api-gateway/` | 8080 | Single public entry point; routes to the two services below by path, keeps internal-only endpoints (like restock) off the public route table |
+| **API Gateway** | `api-gateway/` | 8080 | Single public entry point; routes to the two services below by path; validates every request's JWT (AWS Cognito) and enforces group-based authorization for admin routes |
 | **Order Service** | `/` (repo root) | 8081 | Users, products, orders; writes an outbox event per order; consumes inventory outcomes to update order status |
 | **Inventory Service** | `inventory-service/` | 8082 | Owns live stock; consumes order events, reserves stock idempotently, publishes the outcome |
 
@@ -46,7 +46,8 @@ Each service has its own database (own Oracle user locally, own Postgres databas
 - **Choreographed saga** — Order Service creates orders optimistically (`PENDING`) and reacts asynchronously to Inventory Service's verdict (`CONFIRMED`/`CANCELLED`), rather than either service calling the other synchronously.
 - **Idempotent consumers** — Inventory Service tracks processed event IDs so a redelivered Kafka message (a real possibility under at-least-once delivery) doesn't double-deduct stock.
 - **Retry + dead-letter topic** — a failing consumer retries a bounded number of times, then the record is routed to a DLT instead of blocking the consumer indefinitely.
-- **API Gateway as the only public door** — internal/admin-only operations (like restocking inventory) are deliberately excluded from the gateway's routes, reachable only from inside the network.
+- **API Gateway as the only public door** — the Gateway is the sole trust boundary: it validates every request's JWT and is the only service exposed to the internet at all.
+- **Authentication vs. authorization, cleanly separated** — AWS Cognito (a User Pool) handles authentication (issuing signed JWTs on login); the Gateway handles authorization (any valid token for most routes, a specific `admin` group claim for the restock route). Order Service and Inventory Service have zero auth code — they trust the Gateway completely, which only works because their ports stay off the public internet at the network level.
 - **Real AWS deployment** — RDS PostgreSQL (translated from the Oracle schema used locally), Dockerized services on EC2, least-privilege IAM (a role scoped to exactly the CloudWatch permissions needed, nothing more), and security groups that reference each other rather than open IP ranges.
 
 ## Local development
@@ -64,16 +65,17 @@ Swagger UI (exploring/testing by hand — not proxied through the gateway):
 
 ## API (through the Gateway — `http://localhost:8080`)
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/users`, `/users/{id}` | Look up users |
-| `GET` | `/products`, `/products/{id}` | Look up products and prices |
-| `POST` | `/orders` | Create an order (always returns `201`, status starts `PENDING`) |
-| `GET` | `/orders/{id}` | Get one order — poll this to watch status settle |
-| `GET` | `/users/{id}/orders` | Order history for a user |
-| `GET` | `/stock`, `/stock/{id}` | Live stock levels |
+Every route below requires `Authorization: Bearer <token>` — see [DEPLOYMENT.md](DEPLOYMENT.md#phase-4--authentication-at-the-gateway-aws-cognito) for how to get one from Cognito.
 
-`POST /stock/{id}/restock` exists but is intentionally **not** reachable through the Gateway — see Inventory Service directly (internal-only by design).
+| Method | Path | Auth required | Purpose |
+|---|---|---|---|
+| `GET` | `/users`, `/users/{id}` | Any valid token | Look up users |
+| `GET` | `/products`, `/products/{id}` | Any valid token | Look up products and prices |
+| `POST` | `/orders` | Any valid token | Create an order (always returns `201`, status starts `PENDING`) |
+| `GET` | `/orders/{id}` | Any valid token | Get one order — poll this to watch status settle |
+| `GET` | `/users/{id}/orders` | Any valid token | Order history for a user |
+| `GET` | `/stock`, `/stock/{id}` | Any valid token | Live stock levels |
+| `POST` | `/stock/{id}/restock` | Token must carry the `admin` group | Record a stock delivery |
 
 ## AWS deployment
 
@@ -82,7 +84,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full provisioning walkthrough (RDS, E
 ## Known limitations
 
 - No tests.
-- No authentication/authorization on any endpoint.
+- No self-service signup flow or frontend — test users are created via the Cognito CLI (see DEPLOYMENT.md); tokens are fetched directly from Cognito's API, not a browser login.
 - Stock reservation has no locking — a narrow race is possible under real concurrent load.
 - No Payment or Notification service yet (deliberately out of scope so far).
 - No CI/CD — deploys are manual (`git clone` / file transfer + `docker compose up` on the EC2 instance).

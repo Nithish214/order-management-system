@@ -31,17 +31,20 @@ spring:
           predicates:
             - Path=/products/**
 
-        # GET-only, deliberately: /stock/{id}/restock is an internal/admin operation (a warehouse
-        # system recording a delivery), not something a customer-facing frontend should ever call.
-        # Multiple predicates on one route are AND'd together, so this matches reads only -- a POST
-        # to /stock/**/restock won't match any route here and gets a plain 404 from the Gateway.
-        # It's still reachable directly on Inventory Service's own port, same as a real deployment
-        # would keep that port off the public internet, reachable only internally.
         - id: inventory-service-stock-read
           uri: ${inventory.service.url:http://localhost:8082}
           predicates:
             - Path=/stock/**
             - Method=GET
+
+        # Now reachable through the Gateway again (Phase 3 hid it entirely instead of
+        # authorizing it -- Phase 4 does this properly with a real group check in
+        # SecurityConfig, so "hidden route" is no longer the only line of defense here).
+        - id: inventory-service-stock-restock
+          uri: ${inventory.service.url:http://localhost:8082}
+          predicates:
+            - Path=/stock/*/restock
+            - Method=POST
 
       # CORS lives here, once, instead of being duplicated on every backend service -- the
       # browser only ever talks to this gateway directly, so this is the only place it matters.
@@ -57,6 +60,16 @@ spring:
               - OPTIONS
             allowedHeaders: "*"
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Spring Security fetches <issuer-uri>/.well-known/openid-configuration at startup,
+          # follows it to Cognito's JWKS endpoint (its public signing keys), and uses those to
+          # verify every incoming token's signature -- no key ever hardcoded here.
+          issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_184lqspmP}
+
 logging:
   level:
     org.springframework.cloud.gateway: INFO
+    org.springframework.security: INFO

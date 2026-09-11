@@ -1,4 +1,4 @@
-# Phase 3 — AWS Deployment
+# Phase 3-4 — AWS Deployment & Authentication
 
 Deploys the existing system (Order Service, Inventory Service, API Gateway, Kafka) to a
 single, cost-conscious AWS setup. No new business features. Local dev (Oracle,
@@ -189,7 +189,149 @@ That's the entire log setup — no agent, no config file, just Docker sending ea
 | CloudWatch Logs | 5GB ingestion + 5GB storage, **always-free** (not time-limited) | Set retention (see above) — indefinite retention slowly costs more over time |
 | CloudWatch metrics/alarms | 10 custom metrics, 10 alarms, always-free | Stick to EC2's free defaults; only add the Agent if you specifically want memory metrics |
 | Elastic IP (if you allocate one) | Free **only while attached to a running instance** | An allocated-but-unattached Elastic IP bills hourly — a classic surprise-bill trap. Either don't allocate one (the default public IP is fine and simpler for a learning project) or remember to release it |
+| Cognito User Pool (Essentials tier) | **10,000 MAUs/month free, always-free** — not time-limited, not tied to account age ([AWS's own pricing page](https://aws.amazon.com/cognito/pricing/)) | A "MAU" only counts if a user does something (sign-in, token refresh, etc.) that month — a couple of test users will never come close to 10,000 |
 
 *AWS's free-tier terms have shifted for newer accounts — check your own account's **Billing → Free Tier** page to confirm exactly what applies to you before assuming these numbers.
 
 **Biggest realistic risk for this specific project**: leaving the EC2 instance (and RDS) running 24/7 for a full month without noticing, out of the habit of just leaving it be since it's "free." **Stop** (not terminate — stopping preserves your EBS volume and RDS data) both when you're not actively using them. Set the AWS Budget alert regardless — it costs nothing and catches the mistake either way.
+
+---
+
+# Phase 4 — Authentication at the Gateway (AWS Cognito)
+
+Adds real authentication in front of the whole system. Before this phase, anyone who
+could reach the EC2 instance's public IP could call every endpoint. Now, every route
+requires a valid Cognito-issued JWT, and the restock route additionally requires the
+caller's token to carry the `admin` group. Order Service and Inventory Service have
+**zero code changes** — they remain completely unaware auth exists at all.
+
+## Concepts
+
+- **User Pool, not Identity Pool.** A User Pool is a user directory + authentication
+  service (sign-up/sign-in, password policy, groups, issues JWTs). An Identity Pool
+  federates a token into temporary *AWS* credentials, for when a client needs to call
+  AWS services (S3, DynamoDB) directly. Nothing here touches AWS resources on a user's
+  behalf, so only a User Pool is needed.
+- **ID token vs. Access token.** Cognito issues both on login. The ID token describes
+  the user (for your own app's use); the **Access token** is what's meant to be sent to
+  APIs as `Authorization: Bearer <token>` to prove the caller is authorized. Both carry
+  `cognito:groups`, but the access token is the correct one here.
+- **What `issuer-uri` does.** Spring Security fetches
+  `<issuer-uri>/.well-known/openid-configuration` at startup, follows it to Cognito's
+  JWKS (public signing keys) endpoint, and uses those keys to verify every token's
+  signature — no key is ever hardcoded in the app.
+- **Why Order Service/Inventory Service need no changes.** They trust that the only way
+  to reach them is through the Gateway. This is only actually true because their ports
+  (8081/8082) stay off the public internet at the security-group level (set up back in
+  Phase 3) — without that, "trust the Gateway" would just be security theater, not a
+  real boundary.
+
+## Provisioning the User Pool (CLI)
+
+```bash
+# User Pool — Essentials tier (default), email as username, a real password policy
+aws cognito-idp create-user-pool --pool-name order-management-users --region eu-west-1 \
+  --policies '{"PasswordPolicy":{"MinimumLength":8,"RequireUppercase":true,"RequireLowercase":true,"RequireNumbers":true,"RequireSymbols":true}}' \
+  --auto-verified-attributes email \
+  --username-attributes email
+
+# App client — no secret (Postman/curl call Cognito directly, not via a confidential backend),
+# USER_PASSWORD_AUTH enabled so InitiateAuth (below) works without a browser redirect
+aws cognito-idp create-user-pool-client --user-pool-id <pool-id> \
+  --client-name order-management-app-client \
+  --no-generate-secret \
+  --explicit-auth-flows ALLOW_USER_PASSWORD_AUTH ALLOW_REFRESH_TOKEN_AUTH
+
+# The group the restock route checks for
+aws cognito-idp create-group --user-pool-id <pool-id> \
+  --group-name admin --description "Users allowed to manage inventory (restock)"
+```
+
+## Creating test users and getting a JWT
+
+```bash
+# Regular user
+aws cognito-idp admin-create-user --user-pool-id <pool-id> \
+  --username testuser@example.com \
+  --user-attributes Name=email,Value=testuser@example.com Name=email_verified,Value=true \
+  --message-action SUPPRESS
+aws cognito-idp admin-set-user-password --user-pool-id <pool-id> \
+  --username testuser@example.com --password "TestPass123!" --permanent
+
+# Admin user
+aws cognito-idp admin-create-user --user-pool-id <pool-id> \
+  --username admin@example.com \
+  --user-attributes Name=email,Value=admin@example.com Name=email_verified,Value=true \
+  --message-action SUPPRESS
+aws cognito-idp admin-set-user-password --user-pool-id <pool-id> \
+  --username admin@example.com --password "AdminPass123!" --permanent
+aws cognito-idp admin-add-user-to-group --user-pool-id <pool-id> \
+  --username admin@example.com --group-name admin
+```
+
+`admin-set-user-password ... --permanent` skips Cognito's normal "force password change
+on first login" flow — appropriate for test users created by an admin, not how a real
+signup would work (a real user would self-register and verify their own email).
+
+Get a token directly from Cognito's API (no browser/hosted UI needed):
+```bash
+aws cognito-idp initiate-auth --client-id <client-id> --auth-flow USER_PASSWORD_AUTH \
+  --auth-parameters USERNAME=testuser@example.com,PASSWORD="TestPass123!" \
+  --query "AuthenticationResult.AccessToken" --output text
+```
+This returns the **Access token** — copy it, it's what goes in the `Authorization` header.
+Tokens expire after 1 hour by default; re-run this command to get a fresh one, or use the
+returned `RefreshToken` (valid 30 days) with `--auth-flow REFRESH_TOKEN_AUTH` instead.
+
+## Calling the API with a token
+
+**Postman**: Authorization tab → type **Bearer Token** → paste the access token. Or set
+the header manually:
+
+```
+GET http://<ec2-ip>:8080/products
+Authorization: Bearer eyJraWQiOiJ...
+```
+
+**curl**:
+```bash
+TOKEN=$(aws cognito-idp initiate-auth --client-id <client-id> --auth-flow USER_PASSWORD_AUTH \
+  --auth-parameters USERNAME=testuser@example.com,PASSWORD="TestPass123!" \
+  --query "AuthenticationResult.AccessToken" --output text)
+
+curl -H "Authorization: Bearer $TOKEN" http://<ec2-ip>:8080/products
+```
+
+**What each case returns:**
+
+| Request | Result |
+|---|---|
+| No `Authorization` header | `401 Unauthorized` |
+| Invalid/expired token | `401 Unauthorized` |
+| Valid token (any user), normal route | `200` |
+| Valid token, **not** in `admin` group, `POST /stock/{id}/restock` | `403 Forbidden` |
+| Valid token, **in** `admin` group, `POST /stock/{id}/restock` | `200` |
+
+## Gateway changes, summarized
+
+- `spring-boot-starter-oauth2-resource-server` added to `api-gateway/pom.xml` only —
+  deliberately **not** `oauth2-client`/TokenRelay, since there's no frontend doing a
+  browser login flow yet; Postman/curl get tokens directly from Cognito and send them
+  straight to the Gateway, the textbook Resource Server pattern.
+- `spring.security.oauth2.resourceserver.jwt.issuer-uri` in `application.yml`, pointing
+  at the User Pool, read from the `COGNITO_ISSUER_URI` env var in production.
+- `SecurityConfig.java` — the entire authorization policy in one place: `POST
+  /stock/*/restock` requires `hasAuthority("ROLE_admin")` (mapped from the token's
+  `cognito:groups` claim via a custom `JwtAuthenticationConverter`); every other route
+  just requires `.authenticated()`.
+- The restock route, previously **excluded entirely** from the Gateway's routes (Phase
+  3's "hide it" approach), is now **back in the route table**, protected by the group
+  check instead — real authorization instead of just obscurity.
+
+## Deploying the env var
+
+Add to the EC2 instance's `.env` (alongside the RDS credentials):
+```
+COGNITO_ISSUER_URI=https://cognito-idp.<region>.amazonaws.com/<user-pool-id>
+```
+Then `docker compose -f docker-compose.prod.yml up -d --build api-gateway`.

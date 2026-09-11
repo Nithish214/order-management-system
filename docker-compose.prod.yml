@@ -28,8 +28,13 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Kafka's default is 50 partitions for its internal __consumer_offsets topic -- sized for
+      # real production clusters, wildly oversized for one single-broker learning setup. Each
+      # partition costs the log-cleaner memory during startup; this was a real contributor to
+      # an OutOfMemoryError we hit, not just the heap size below.
+      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: 3
       CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
-      KAFKA_HEAP_OPTS: "-Xmx220m -Xms220m"
+      KAFKA_HEAP_OPTS: "-Xmx320m -Xms320m"
     restart: unless-stopped
 
   order-service:
@@ -88,7 +93,8 @@ services:
       # "order-service" a valid hostname here, unlike on your local machine.
       ORDER_SERVICE_URL: http://order-service:8081
       INVENTORY_SERVICE_URL: http://inventory-service:8082
-      JAVA_OPTS: "-Xmx70m"
+      COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI}
+      JAVA_OPTS: "-Xmx90m"
     ports:
       - "8080:8080"
     restart: unless-stopped
