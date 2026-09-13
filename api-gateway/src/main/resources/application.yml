@@ -46,19 +46,12 @@ spring:
             - Path=/stock/*/restock
             - Method=POST
 
-      # CORS lives here, once, instead of being duplicated on every backend service -- the
-      # browser only ever talks to this gateway directly, so this is the only place it matters.
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: "*"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
+      # CORS used to be configured here (spring.cloud.gateway.globalcors), but that mechanism
+      # only applies to responses from requests that actually got routed to a backend --
+      # meaning a 401 from a missing/expired token (rejected by Spring Security before routing
+      # ever happens) never got a CORS header, which browsers report as an opaque "Failed to
+      # fetch" instead of a normal 401. CORS is now configured once, in SecurityConfig's own
+      # CorsWebFilter, which runs early enough to cover every response this Gateway sends.
 
   security:
     oauth2:
