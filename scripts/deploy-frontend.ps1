@@ -1,13 +1,12 @@
-# Rebuilds and republishes the React frontend after the EC2 box's public IP has
-# changed (every stop/start cycle gives it a new one, since we don't use an Elastic IP
-# to avoid the small standing cost of one sitting unattached). Frontend/.env bakes the
-# gateway URL in at BUILD time (Vite inlines import.meta.env.* into the JS bundle), so
-# a stale .env means a stale build -- there's no way to fix this by just re-uploading
-# the old dist/ folder, it has to be rebuilt.
+# Rebuilds and republishes the React frontend to S3 + CloudFront. Run this any time you
+# change frontend code and want it live.
 #
-# Steps: look up the current EC2 IP -> rewrite frontend/.env -> npm run build ->
-# sync dist/ to S3 -> invalidate the CloudFront cache (CloudFront otherwise keeps
-# serving the old cached index.html/JS for up to a day).
+# Before the Gateway had a stable HTTPS domain (see DEPLOYMENT.md, Phase 6 --
+# nithish-ordermgmt.duckdns.org, kept pointed at the EC2 box's current IP by
+# start-all.ps1), this script also had to rewrite frontend/.env's VITE_GATEWAY_URL and
+# rebuild every time the instance restarted and got a new IP. Now that the Gateway URL
+# is a stable domain instead of a raw IP, .env doesn't go stale on its own -- this script
+# only needs to run when the frontend's own code actually changes.
 #
 # Reads config from config.ps1 (copy config.example.ps1 -> config.ps1 and fill in your
 # own values -- config.ps1 is gitignored, never committed).
@@ -15,34 +14,6 @@
 . "$PSScriptRoot\config.ps1"
 
 $FrontendDir = Join-Path $PSScriptRoot "..\frontend"
-$EnvPath = Join-Path $FrontendDir ".env"
-
-Write-Host "Looking up current EC2 public IP..." -ForegroundColor Cyan
-$PublicIp = aws ec2 describe-instances --instance-ids $InstanceId --query "Reservations[].Instances[].PublicIpAddress" --output text
-if (-not $PublicIp -or $PublicIp -eq "None") {
-    Write-Host "Instance has no public IP right now -- is it running? (see start-all.ps1)" -ForegroundColor Red
-    exit 1
-}
-Write-Host "EC2 public IP: $PublicIp" -ForegroundColor Green
-
-# Preserve every other line in .env (Cognito settings etc.) and only touch the gateway URL,
-# rather than overwriting the whole file -- keeps this script safe to run even if someone
-# has added extra VITE_ vars locally.
-Write-Host "Updating VITE_GATEWAY_URL in frontend/.env..." -ForegroundColor Cyan
-$NewGatewayLine = "VITE_GATEWAY_URL=http://${PublicIp}:8080"
-if (Test-Path $EnvPath) {
-    $EnvLines = Get-Content $EnvPath
-    $Found = $false
-    $EnvLines = $EnvLines | ForEach-Object {
-        if ($_ -match '^VITE_GATEWAY_URL=') { $Found = $true; $NewGatewayLine } else { $_ }
-    }
-    if (-not $Found) { $EnvLines += $NewGatewayLine }
-    Set-Content -Path $EnvPath -Value $EnvLines -Encoding utf8
-} else {
-    Write-Host ".env not found at $EnvPath -- copy frontend/.env.example first." -ForegroundColor Red
-    exit 1
-}
-Write-Host "frontend/.env now points at http://${PublicIp}:8080" -ForegroundColor Green
 
 Write-Host "Building frontend (npm run build)..." -ForegroundColor Cyan
 Push-Location $FrontendDir

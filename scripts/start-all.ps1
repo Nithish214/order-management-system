@@ -23,6 +23,18 @@ aws ec2 wait instance-running --instance-ids $InstanceId
 $PublicIp = aws ec2 describe-instances --instance-ids $InstanceId --query "Reservations[].Instances[].PublicIpAddress" --output text
 Write-Host "EC2 running. Public IP: $PublicIp" -ForegroundColor Green
 
+# The Gateway is reached via a stable DuckDNS hostname (see DEPLOYMENT.md, Phase 6),
+# not the raw IP -- Caddy on the EC2 box holds a Let's Encrypt cert for that hostname,
+# and the frontend is built against it. That hostname is only useful if it actually
+# points at wherever the instance landed this time, so re-point it every start.
+Write-Host "Pointing $GatewayDomain at the new IP via DuckDNS..." -ForegroundColor Cyan
+$DuckDnsResult = Invoke-RestMethod -Uri "https://www.duckdns.org/update?domains=$DuckDnsDomain&token=$DuckDnsToken&ip=$PublicIp"
+if ($DuckDnsResult -notmatch "^OK") {
+    Write-Host "DuckDNS update returned unexpected response: $DuckDnsResult" -ForegroundColor Yellow
+} else {
+    Write-Host "$GatewayDomain -> $PublicIp" -ForegroundColor Green
+}
+
 Write-Host "Waiting for RDS to reach 'available' (usually the slow part, several minutes)..." -ForegroundColor Cyan
 do {
     Start-Sleep -Seconds 15
@@ -61,11 +73,16 @@ for ($i = 0; $i -lt 30; $i++) {
 Write-Host "Both backend services healthy. Restarting api-gateway to clear any stale connections..." -ForegroundColor Cyan
 ssh -i $KeyPath "$SshUser@$PublicIp" "cd order-management && sudo docker compose -f docker-compose.prod.yml restart api-gateway" | Out-Null
 
-Write-Host "Waiting for the app to respond through the gateway..." -ForegroundColor Cyan
+# HTTPS for the Gateway is terminated by the host's own nginx (not a container) -- this
+# same EC2 instance already runs nginx + certbot for an unrelated personal site, so the
+# Gateway just got a second server block added to that existing nginx config instead of
+# running a competing reverse-proxy container for port 80/443. Nothing to restart there;
+# nginx proxies to api-gateway on localhost:8080, which just came back up above.
+Write-Host "Waiting for the app to respond through the gateway (via nginx, HTTPS)..." -ForegroundColor Cyan
 $AppReady = $false
 for ($i = 0; $i -lt 20; $i++) {
     try {
-        $resp = Invoke-WebRequest -Uri "http://${PublicIp}:8080/products" -TimeoutSec 5 -UseBasicParsing
+        $resp = Invoke-WebRequest -Uri "https://${GatewayDomain}/products" -TimeoutSec 5 -UseBasicParsing
         if ($resp.StatusCode -eq 200) { $AppReady = $true; break }
     } catch {}
     Start-Sleep -Seconds 5
@@ -73,8 +90,9 @@ for ($i = 0; $i -lt 20; $i++) {
 
 Write-Host ""
 if ($AppReady) {
-    Write-Host "READY. App is live at: http://${PublicIp}:8080" -ForegroundColor Green
+    Write-Host "READY. App is live at: https://${GatewayDomain}" -ForegroundColor Green
 } else {
     Write-Host "App did not respond in time through the gateway -- check manually:" -ForegroundColor Yellow
-    Write-Host "  http://${PublicIp}:8080/products"
+    Write-Host "  https://${GatewayDomain}/products (via nginx)"
+    Write-Host "  http://${PublicIp}:8080/products (direct, bypassing nginx -- useful to tell apart an nginx/cert problem from a backend problem)"
 }

@@ -391,6 +391,68 @@ to a day). Run it after `start-all.ps1` any time the EC2 instance has been resta
 The frontend is served over HTTPS (via CloudFront) but talks to the backend Gateway
 over plain HTTP (`http://<ec2-ip>:8080`) — there's no TLS on the Gateway yet. Most
 browsers block this as mixed content on an HTTPS page. Fixing it properly means adding
-HTTPS to the Gateway itself (a TLS terminator in front of it, or a load balancer),
-which hasn't been done yet since it adds either cost (ALB) or complexity (self-managed
-certs on a single EC2 instance) beyond what this phase covers.
+HTTPS to the Gateway itself (a TLS terminator in front of it, or a load balancer) — see
+Phase 6 below, where this gets fixed.
+
+---
+
+# Phase 6 — HTTPS for the Gateway (free domain + Let's Encrypt)
+
+Fixes the mixed-content limitation from Phase 5: the Gateway now has a real HTTPS
+endpoint at `https://<your-subdomain>.duckdns.org`, backed by a genuine, browser-trusted
+Let's Encrypt certificate — at zero cost.
+
+## Why not an Elastic IP + a paid domain?
+
+Two ongoing costs stack up in the "obvious" approach: an Elastic IP bills hourly once
+it's not attached to a running instance (see the Phase 3 cost breakdown — this project
+deliberately avoids allocating one), and Let's Encrypt won't issue a certificate for a
+bare IP anyway — it needs a real domain name to prove ownership of. **DuckDNS** solves
+both: it's a free dynamic-DNS service giving a stable `*.duckdns.org` hostname that gets
+re-pointed at the instance's current (changing) public IP via a simple HTTP call — no
+domain purchase, no Elastic IP.
+
+## How it's wired up
+
+- **`scripts/start-all.ps1`** now calls DuckDNS's update API (`$DuckDnsDomain`,
+  `$DuckDnsToken` — read from `config.ps1`, gitignored, since the token is a real
+  credential) with the instance's freshly-fetched public IP, every time the instance
+  starts. So the domain always points at wherever the instance currently is, without
+  anything needing to run on the EC2 box itself.
+- **Let's Encrypt cert + reverse proxy**: this EC2 instance already runs `nginx` +
+  `certbot` for an unrelated personal site sharing the box — rather than adding a second
+  reverse proxy fighting over ports 80/443 (a container like Caddy would conflict with
+  that existing nginx), the Gateway got a **second nginx server block** for its own
+  domain, proxying to `api-gateway` on `localhost:8080`, secured with its own independent
+  cert via `sudo certbot --nginx -d <your-subdomain>.duckdns.org --redirect`. Certbot's
+  own systemd timer (already installed for the other site) handles renewal for both
+  certs going forward — nothing extra to maintain.
+  ```nginx
+  # /etc/nginx/sites-available/<your-subdomain>.duckdns.org (before certbot edits it in
+  # a second pass to add the SSL server block + redirect)
+  server {
+      listen 80;
+      listen [::]:80;
+      server_name <your-subdomain>.duckdns.org;
+
+      location / {
+          proxy_pass http://127.0.0.1:8080;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+      }
+  }
+  ```
+  (If this were the only site on the box, a container-based reverse proxy like Caddy —
+  which auto-manages its own Let's Encrypt cert with zero nginx/certbot setup — would
+  actually be the simpler choice. The nginx route here is specifically because port
+  80/443 were already spoken for.)
+- **Security group**: port 80 opened (`0.0.0.0/0`) in addition to the existing 443 — the
+  ACME HTTP-01 challenge needs it briefly during cert issuance/renewal, and nginx also
+  uses it to redirect plain `http://` requests to `https://`.
+- **`frontend/.env`**: `VITE_GATEWAY_URL` now points at `https://<your-subdomain>.duckdns.org`
+  instead of `http://<ec2-ip>:8080`. Since this is a stable domain instead of an IP that
+  changes on every restart, `scripts/deploy-frontend.ps1` no longer needs to rewrite it —
+  that script now only rebuilds and republishes when the frontend's own code changes.
