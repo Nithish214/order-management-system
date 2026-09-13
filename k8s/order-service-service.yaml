@@ -1,0 +1,19 @@
+# ClusterIP: only reachable from inside the cluster, never from your browser or the
+# host machine directly. That's deliberate -- Order Service is an internal implementation
+# detail (the Gateway is the only thing meant to be reachable from outside), the same
+# reasoning that kept its port off the public internet entirely in the EC2 security
+# group. Later, the Gateway's own Service will be NodePort (or LoadBalancer in a real
+# cloud cluster) specifically because it's the one thing that SHOULD be reachable from
+# outside.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  type: ClusterIP
+  selector:
+    app: order-service
+  ports:
+    - port: 8081
+      targetPort: 8081
