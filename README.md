@@ -35,7 +35,7 @@ cloud deployment — rather than just reading about them.
 | Service | Folder | Port | Role |
 |---|---|---|---|
 | **API Gateway** | `api-gateway/` | 8080 | Single public entry point; routes to the two services below by path; validates every request's JWT (AWS Cognito) and enforces group-based authorization for admin routes |
-| **Order Service** | `/` (repo root) | 8081 | Users, products, orders; writes an outbox event per order; consumes inventory outcomes to update order status |
+| **Order Service** | `order-service/` | 8081 | Users, products, orders; writes an outbox event per order; consumes inventory outcomes to update order status |
 | **Inventory Service** | `inventory-service/` | 8082 | Owns live stock; consumes order events, reserves stock idempotently, publishes the outcome |
 
 Each service has its own database (own Oracle user locally, own Postgres database on the same RDS instance in AWS) — no service reads another's tables directly.
@@ -54,7 +54,7 @@ Each service has its own database (own Oracle user locally, own Postgres databas
 
 ```bash
 docker compose up -d oracle          # Oracle XE for local dev
-mvn spring-boot:run                  # Order Service (repo root), :8081
+cd order-service && mvn spring-boot:run       # :8081
 cd inventory-service && mvn spring-boot:run   # :8082
 cd api-gateway && mvn spring-boot:run         # :8080
 ```

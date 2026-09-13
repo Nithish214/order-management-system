@@ -2,9 +2,8 @@
 # host machine directly. That's deliberate -- Order Service is an internal implementation
 # detail (the Gateway is the only thing meant to be reachable from outside), the same
 # reasoning that kept its port off the public internet entirely in the EC2 security
-# group. Later, the Gateway's own Service will be NodePort (or LoadBalancer in a real
-# cloud cluster) specifically because it's the one thing that SHOULD be reachable from
-# outside.
+# group. The Gateway's own Service (../gateway/service.yaml) is NodePort instead,
+# specifically because it's the one thing that SHOULD be reachable from outside.
 
 apiVersion: v1
 kind: Service

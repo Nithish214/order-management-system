@@ -1,4 +1,4 @@
-# Same shape as order-service-deployment.yaml -- same RDS instance, own database
+# Same shape as ../order-service/deployment.yaml -- same RDS instance, own database
 # (inventorydb) rather than a genuinely separate RDS instance. A separate instance only
 # earns its cost once you need independent scaling/backups/blast-radius isolation
 # between the two services, none of which apply here.
@@ -34,7 +34,7 @@ spec:
             - name: DB_USERNAME
               value: "orderadmin"
             - name: DB_PASSWORD
-              # Redacted before committing -- see order-service-deployment.yaml's comment.
+              # Redacted before committing -- see ../order-service/deployment.yaml's comment.
               value: "REPLACE_WITH_REAL_RDS_PASSWORD"
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: "kafka:9092"

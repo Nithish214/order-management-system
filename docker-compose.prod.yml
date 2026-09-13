@@ -39,7 +39,7 @@ services:
 
   order-service:
     build:
-      context: .
+      context: ./order-service
       dockerfile: Dockerfile
     container_name: order-service
     depends_on:
