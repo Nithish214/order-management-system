@@ -42,7 +42,7 @@ public class InventoryOutcomeListener {
     @Transactional
     public void onInventoryFailed(String message) throws Exception {
         InventoryOutcomeEvent event = objectMapper.readValue(message, InventoryOutcomeEvent.class);
-        applyStatus(event.getOrderId(), OrderStatus.CANCELLED, event.getReason());
+        applyStatus(event.getOrderId(), OrderStatus.REJECTED, event.getReason());
     }
 
     private void applyStatus(Long orderId, OrderStatus status, String reason) {
@@ -51,9 +51,16 @@ public class InventoryOutcomeListener {
             log.warn("Received inventory outcome for unknown order {}", orderId);
             return;
         }
+        // Don't clobber a status the customer already set themselves -- if they cancelled
+        // while this outcome was in flight, their cancellation should stick, not get
+        // silently overwritten by an outcome that's now moot.
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            log.info("Ignoring inventory outcome for order {} -- already cancelled by customer", orderId);
+            return;
+        }
         order.setStatus(status);
-        if (status == OrderStatus.CANCELLED) {
-            log.info("Order {} cancelled: {}", orderId, reason);
+        if (status == OrderStatus.REJECTED) {
+            log.info("Order {} rejected: {}", orderId, reason);
         } else {
             log.info("Order {} confirmed", orderId);
         }

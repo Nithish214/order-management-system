@@ -26,6 +26,11 @@ public class GlobalExceptionHandler {
         return buildError(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
+    @ExceptionHandler(InvalidOrderStateException.class)
+    public ResponseEntity<ApiError> handleInvalidState(InvalidOrderStateException ex) {
+        return buildError(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex) {
         return buildError(HttpStatus.BAD_REQUEST, ex.getMessage());

@@ -3,7 +3,11 @@ import { Link, useParams } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 
 const POLL_INTERVAL_MS = 3000;
-const TERMINAL_STATUSES = ["CONFIRMED", "CANCELLED"];
+// REJECTED (Inventory couldn't fulfill it) and CANCELLED (the customer cancelled it
+// themselves) are both terminal, but distinct outcomes -- see OrderStatus.java for why
+// they're separate statuses instead of one shared "didn't happen" status.
+const TERMINAL_STATUSES = ["CONFIRMED", "CANCELLED", "REJECTED"];
+const CANCELLABLE_STATUSES = ["PENDING", "CONFIRMED"];
 
 export default function OrderStatusPage() {
   // useParams reads the :id segment out of the current URL (e.g. /orders/10 -> id="10") --
@@ -13,6 +17,7 @@ export default function OrderStatusPage() {
   const apiFetch = useApiFetch();
   const [order, setOrder] = useState(null);
   const [error, setError] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     let intervalId;
@@ -57,6 +62,27 @@ export default function OrderStatusPage() {
     };
   }, [id, apiFetch]);
 
+  // Optimistic + reconciled: flips the button/status immediately on success rather than
+  // waiting for the next 3s poll tick to notice, same reasoning as the backend itself
+  // setting status eagerly instead of waiting on Inventory Service's confirmation.
+  async function handleCancel() {
+    setCancelling(true);
+    setError(null);
+    try {
+      const response = await apiFetch(`/orders/${id}/cancel`, { method: "POST" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Could not cancel this order");
+      }
+      const data = await response.json();
+      setOrder(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   if (error) return <p style={{ color: "red" }}>{error}</p>;
   if (!order) return <p>Loading order...</p>;
 
@@ -68,6 +94,12 @@ export default function OrderStatusPage() {
       <h1>Order #{order.id}</h1>
 
       <Stepper status={order.status} />
+
+      {CANCELLABLE_STATUSES.includes(order.status) && (
+        <button onClick={handleCancel} disabled={cancelling} style={{ marginTop: 16 }}>
+          {cancelling ? "Cancelling..." : "Cancel order"}
+        </button>
+      )}
 
       <table style={{ width: "100%", marginTop: 24, borderCollapse: "collapse" }}>
         <tbody>
@@ -87,24 +119,27 @@ export default function OrderStatusPage() {
   );
 }
 
-// Deliberately two real outcomes, not three -- see the note above the component list:
-// "inventory reserved" and "confirmed" are the same backend event, not sequential steps,
-// so a fake middle step here would show something that never actually happens.
+// "Inventory reserved" and "confirmed" are the same backend event, not sequential steps,
+// so a fake middle step here would show something that never actually happens -- still
+// just two real steps, now with three possible outcomes for the second one: confirmed,
+// rejected (Inventory couldn't fulfill it), or cancelled (the customer cancelled it).
 function Stepper({ status }) {
-  const isCancelled = status === "CANCELLED";
   const isConfirmed = status === "CONFIRMED";
+  const isRejected = status === "REJECTED";
+  const isCancelled = status === "CANCELLED";
+  const isSettled = isConfirmed || isRejected || isCancelled;
 
-  const step2Label = isCancelled ? "Cancelled" : "Confirmed";
-  const step2Color = isCancelled ? "crimson" : isConfirmed ? "green" : "gray";
+  const labels = { CONFIRMED: "Confirmed", REJECTED: "Out of stock", CANCELLED: "Cancelled" };
+  const colors = { CONFIRMED: "green", REJECTED: "crimson", CANCELLED: "crimson" };
 
   return (
     <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
       <StepBox label="Order Placed" done color="green" />
       <span>&rarr;</span>
       <StepBox
-        label={status === "PENDING" ? "Processing..." : step2Label}
-        done={isConfirmed || isCancelled}
-        color={step2Color}
+        label={status === "PENDING" ? "Processing..." : labels[status]}
+        done={isSettled}
+        color={colors[status] || "gray"}
       />
     </div>
   );

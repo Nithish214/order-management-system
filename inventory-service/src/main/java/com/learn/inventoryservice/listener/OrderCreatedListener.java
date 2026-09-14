@@ -1,9 +1,11 @@
 package com.learn.inventoryservice.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.inventoryservice.entity.OrderReservationItem;
 import com.learn.inventoryservice.entity.ProcessedEvent;
 import com.learn.inventoryservice.entity.ProductStock;
 import com.learn.inventoryservice.event.OrderCreatedEvent;
+import com.learn.inventoryservice.repository.OrderReservationItemRepository;
 import com.learn.inventoryservice.repository.ProcessedEventRepository;
 import com.learn.inventoryservice.repository.ProductStockRepository;
 import org.slf4j.Logger;
@@ -31,17 +33,20 @@ public class OrderCreatedListener {
 
     private final ProductStockRepository productStockRepository;
     private final ProcessedEventRepository processedEventRepository;
+    private final OrderReservationItemRepository orderReservationItemRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
     public OrderCreatedListener(
             ProductStockRepository productStockRepository,
             ProcessedEventRepository processedEventRepository,
+            OrderReservationItemRepository orderReservationItemRepository,
             KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper
     ) {
         this.productStockRepository = productStockRepository;
         this.processedEventRepository = processedEventRepository;
+        this.orderReservationItemRepository = orderReservationItemRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
     }
@@ -83,6 +88,11 @@ public class OrderCreatedListener {
             for (OrderCreatedEvent.Item item : event.getItems()) {
                 ProductStock stock = reservable.get(item.getProductId());
                 stock.setAvailableQuantity(stock.getAvailableQuantity() - item.getQuantity());
+                // Recorded so a later cancellation (OrderCancelledListener) knows exactly what
+                // this service actually reserved for this order, without needing Order Service
+                // to repeat the item list back to it.
+                orderReservationItemRepository.save(
+                        new OrderReservationItem(event.getOrderId(), item.getProductId(), item.getQuantity()));
             }
             kafkaTemplate.send("inventory.reserved", String.valueOf(event.getOrderId()),
                     reservedPayload(event.getOrderId()));

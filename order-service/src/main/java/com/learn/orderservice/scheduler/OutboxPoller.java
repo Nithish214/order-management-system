@@ -28,7 +28,8 @@ public class OutboxPoller {
     // Keeps the domain event name (what the outbox row calls itself) decoupled from the
     // Kafka topic name (a separate, infrastructure-level naming convention).
     private static final Map<String, String> TOPICS_BY_EVENT_TYPE = Map.of(
-            "OrderCreated", "order.created"
+            "OrderCreated", "order.created",
+            "OrderCancelled", "order.cancelled"
     );
 
     private final OutboxEventRepository outboxEventRepository;

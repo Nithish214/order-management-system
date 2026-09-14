@@ -43,7 +43,7 @@ Each service has its own database (own Oracle user locally, own Postgres databas
 ## What this project actually demonstrates
 
 - **Transactional outbox pattern** — an order write and its "notify Kafka" note commit in one database transaction, avoiding the dual-write problem of calling Kafka directly from request-handling code. A scheduled poller relays outbox rows to Kafka, only marking them published once the broker actually confirms receipt.
-- **Choreographed saga** — Order Service creates orders optimistically (`PENDING`) and reacts asynchronously to Inventory Service's verdict (`CONFIRMED`/`CANCELLED`), rather than either service calling the other synchronously.
+- **Choreographed saga** — Order Service creates orders optimistically (`PENDING`) and reacts asynchronously to Inventory Service's verdict (`CONFIRMED`/`REJECTED`), rather than either service calling the other synchronously. Customers can also cancel a `PENDING`/`CONFIRMED` order themselves (`CANCELLED`) — the mirror-image event, releasing any stock Inventory Service had reserved.
 - **Idempotent consumers** — Inventory Service tracks processed event IDs so a redelivered Kafka message (a real possibility under at-least-once delivery) doesn't double-deduct stock.
 - **Retry + dead-letter topic** — a failing consumer retries a bounded number of times, then the record is routed to a DLT instead of blocking the consumer indefinitely.
 - **API Gateway as the only public door** — the Gateway is the sole trust boundary: it validates every request's JWT and is the only service exposed to the internet at all.
@@ -73,6 +73,7 @@ Every route below requires `Authorization: Bearer <token>` — see [DEPLOYMENT.m
 | `GET` | `/products`, `/products/{id}` | Any valid token | Look up products and prices |
 | `POST` | `/orders` | Any valid token | Create an order for the caller (identity from the token, not the request body) |
 | `GET` | `/orders/{id}` | Only the order's owner | Get one order — poll this to watch status settle; `403` if it isn't yours |
+| `POST` | `/orders/{id}/cancel` | Only the order's owner | Cancel a `PENDING`/`CONFIRMED` order — releases any reserved stock; `409` if it's already terminal |
 | `GET` | `/orders/mine` | Any valid token | The caller's own order history |
 | `GET` | `/stock`, `/stock/{id}` | Any valid token | Live stock levels |
 | `POST` | `/stock/{id}/restock` | Token must carry the `admin` group | Record a stock delivery |

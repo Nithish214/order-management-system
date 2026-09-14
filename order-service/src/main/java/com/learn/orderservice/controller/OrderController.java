@@ -4,6 +4,7 @@ import com.learn.orderservice.dto.CreateOrderRequest;
 import com.learn.orderservice.dto.OrderResponse;
 import com.learn.orderservice.entity.*;
 import com.learn.orderservice.exception.ForbiddenException;
+import com.learn.orderservice.exception.InvalidOrderStateException;
 import com.learn.orderservice.repository.*;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
@@ -155,6 +156,66 @@ public class OrderController {
                         .toList())
                 .orElse(List.of());
         return ResponseEntity.ok(responses);
+    }
+
+    // Customer-initiated cancellation. Sets the order's status immediately (optimistically,
+    // same reasoning as createOrder setting PENDING immediately) -- the customer doesn't
+    // need to wait for Inventory Service to actually finish releasing stock before seeing
+    // their order marked cancelled, since from their side the outcome isn't in question the
+    // way order confirmation was. Inventory Service releases any reserved stock
+    // asynchronously via the OrderCancelled event below; see its OrderCancelledListener.
+    @PostMapping("/orders/{id}/cancel")
+    @Transactional
+    public ResponseEntity<OrderResponse> cancelOrder(
+            @PathVariable Long id,
+            @RequestHeader("X-User-Sub") String cognitoSub
+    ) {
+        Order order = orderRepository.findByIdWithUserAndItems(id)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found: " + id));
+
+        boolean isOwner = appUserRepository.findByCognitoSub(cognitoSub)
+                .map(caller -> caller.getId().equals(order.getUser().getId()))
+                .orElse(false);
+        if (!isOwner) {
+            throw new ForbiddenException("Order " + id + " does not belong to you");
+        }
+
+        // Only PENDING and CONFIRMED are cancellable -- everything else is already terminal.
+        // CONFIRMED is included (not just PENDING) because a customer should be able to
+        // cancel an order that's already been confirmed but, say, hasn't shipped yet; that's
+        // exactly the case where Inventory Service actually has stock reserved that needs
+        // releasing, which is why this event exists instead of just flipping a status flag.
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.CONFIRMED) {
+            throw new InvalidOrderStateException(
+                    "Order " + id + " cannot be cancelled from status " + order.getStatus());
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+
+        OutboxEvent outboxEvent = new OutboxEvent();
+        outboxEvent.setAggregateType("Order");
+        outboxEvent.setAggregateId(String.valueOf(order.getId()));
+        outboxEvent.setEventType("OrderCancelled");
+        outboxEvent.setStatus(OutboxStatus.PENDING);
+        outboxEvent.setPayload("{}");
+        outboxEvent = outboxEventRepository.save(outboxEvent);
+        outboxEvent.setPayload(buildOrderCancelledPayload(order, outboxEvent.getId()));
+
+        return ResponseEntity.ok(OrderResponse.from(order));
+    }
+
+    // Deliberately minimal -- just eventId + orderId, no item list. Inventory Service looks
+    // up what it actually reserved for this order itself (see its OrderReservationItem
+    // table) rather than trusting a repeated item list here; that's the more correct source
+    // of truth, since it's Inventory's own bookkeeping of what it decremented, not Order
+    // Service's belief about what should have been reserved.
+    private String buildOrderCancelledPayload(Order order, Long eventId) {
+        return """
+                {
+                  "eventId": %d,
+                  "orderId": %d
+                }
+                """.formatted(eventId, order.getId());
     }
 
     private String buildOrderCreatedPayload(Order order, Long eventId) {
