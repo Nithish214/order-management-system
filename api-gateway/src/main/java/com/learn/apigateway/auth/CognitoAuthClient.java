@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.json.Jackson2JsonDecoder;
+import org.springframework.http.codec.json.Jackson2JsonEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
@@ -33,8 +36,24 @@ public class CognitoAuthClient {
             ObjectMapper objectMapper) {
         this.clientId = clientId;
         this.objectMapper = objectMapper;
+        // Cognito's JSON API uses "application/x-amz-json-1.1" as its content type --
+        // genuinely just JSON, but a non-standard media type string, and Spring's default
+        // Jackson codecs only recognize a fixed allowlist (application/json,
+        // application/*+json). Without this, WebClient refuses to even attempt encoding
+        // the request body or decoding the response, and throws
+        // UnsupportedMediaTypeException before a single byte reaches the network -- this
+        // registers that media type on the same Jackson codecs as an equal to
+        // application/json, both directions.
+        MediaType awsJson = MediaType.valueOf("application/x-amz-json-1.1");
+        ExchangeStrategies strategies = ExchangeStrategies.builder()
+                .codecs(configurer -> {
+                    configurer.customCodecs().register(new Jackson2JsonEncoder(objectMapper, MediaType.APPLICATION_JSON, awsJson));
+                    configurer.customCodecs().register(new Jackson2JsonDecoder(objectMapper, MediaType.APPLICATION_JSON, awsJson));
+                })
+                .build();
         this.webClient = WebClient.builder()
                 .baseUrl("https://cognito-idp." + region + ".amazonaws.com/")
+                .exchangeStrategies(strategies)
                 .build();
     }
 
