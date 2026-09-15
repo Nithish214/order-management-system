@@ -3,11 +3,13 @@ package com.learn.orderservice.controller;
 import com.learn.orderservice.dto.CreateOrderRequest;
 import com.learn.orderservice.dto.OrderResponse;
 import com.learn.orderservice.entity.*;
+import com.learn.orderservice.event.OutboxEventCreated;
 import com.learn.orderservice.exception.ForbiddenException;
 import com.learn.orderservice.exception.InvalidOrderStateException;
 import com.learn.orderservice.repository.*;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,17 +27,20 @@ public class OrderController {
     private final AppUserRepository appUserRepository;
     private final ProductRepository productRepository;
     private final OutboxEventRepository outboxEventRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public OrderController(
             OrderRepository orderRepository,
             AppUserRepository appUserRepository,
             ProductRepository productRepository,
-            OutboxEventRepository outboxEventRepository
+            OutboxEventRepository outboxEventRepository,
+            ApplicationEventPublisher applicationEventPublisher
     ) {
         this.orderRepository = orderRepository;
         this.appUserRepository = appUserRepository;
         this.productRepository = productRepository;
         this.outboxEventRepository = outboxEventRepository;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
     @PostMapping("/orders")
@@ -101,6 +106,13 @@ public class OrderController {
         outboxEvent.setPayload("{}");
         outboxEvent = outboxEventRepository.save(outboxEvent);
         outboxEvent.setPayload(buildOrderCreatedPayload(savedOrder, outboxEvent.getId()));
+
+        // publishEvent() itself is synchronous and returns immediately -- it does NOT block
+        // waiting for this transaction to commit, and does not itself talk to Kafka. All it
+        // does here is register OutboxEventCreatedListener's callback with Spring's
+        // transaction synchronization machinery; that callback is what's deferred until
+        // AFTER_COMMIT; this line of code runs and returns right away, well before that.
+        applicationEventPublisher.publishEvent(new OutboxEventCreated(outboxEvent.getId()));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(OrderResponse.from(savedOrder));
     }
@@ -200,6 +212,10 @@ public class OrderController {
         outboxEvent.setPayload("{}");
         outboxEvent = outboxEventRepository.save(outboxEvent);
         outboxEvent.setPayload(buildOrderCancelledPayload(order, outboxEvent.getId()));
+
+        // Same event-driven publish as createOrder -- cancellation writes an outbox row
+        // through the exact same mechanism, so it gets the exact same fast path.
+        applicationEventPublisher.publishEvent(new OutboxEventCreated(outboxEvent.getId()));
 
         return ResponseEntity.ok(OrderResponse.from(order));
     }

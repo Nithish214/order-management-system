@@ -3,44 +3,42 @@ package com.learn.orderservice.scheduler;
 import com.learn.orderservice.entity.OutboxEvent;
 import com.learn.orderservice.entity.OutboxStatus;
 import com.learn.orderservice.repository.OutboxEventRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
-// Polling implementation of the outbox relay: periodically asks the database for
-// unpublished rows and republishes them to Kafka. See the README for why this
-// project starts with polling instead of a CDC/Debezium-based outbox.
+// Now a SAFETY NET, not the primary publishing path -- OutboxEventCreatedListener handles
+// the normal case (a new row gets published within milliseconds, right after its
+// transaction commits). This still has to exist alongside it, for exactly the cases an
+// in-process event can't cover:
+//   - The app crashes/is killed between the transaction committing and the AFTER_COMMIT
+//     listener finishing its publish -- there's no persistent record that an in-process
+//     event was ever raised, so nothing else will ever retry it except this poller
+//     independently re-scanning the table from scratch.
+//   - The AFTER_COMMIT listener's own Kafka send fails (broker briefly unreachable, etc.)
+//     -- see OutboxPublisher, which leaves the row PENDING on any failure. That one-shot
+//     in-process event doesn't retry itself, so recovery for that specific row depends
+//     entirely on this poller finding it on its next sweep.
+// 30s instead of the old 3s: acceptable now that it's a fallback rather than what every
+// order waits on, and it means 10x fewer no-op queries against Postgres in the overwhelmingly
+// common case where the event-driven path already handled everything.
 @Component
 public class OutboxPoller {
 
-    private static final Logger log = LoggerFactory.getLogger(OutboxPoller.class);
     private static final int BATCH_SIZE = 50;
 
-    // Keeps the domain event name (what the outbox row calls itself) decoupled from the
-    // Kafka topic name (a separate, infrastructure-level naming convention).
-    private static final Map<String, String> TOPICS_BY_EVENT_TYPE = Map.of(
-            "OrderCreated", "order.created",
-            "OrderCancelled", "order.cancelled"
-    );
-
     private final OutboxEventRepository outboxEventRepository;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final OutboxPublisher outboxPublisher;
 
-    public OutboxPoller(OutboxEventRepository outboxEventRepository, KafkaTemplate<String, String> kafkaTemplate) {
+    public OutboxPoller(OutboxEventRepository outboxEventRepository, OutboxPublisher outboxPublisher) {
         this.outboxEventRepository = outboxEventRepository;
-        this.kafkaTemplate = kafkaTemplate;
+        this.outboxPublisher = outboxPublisher;
     }
 
-    @Scheduled(fixedDelay = 3000)
+    @Scheduled(fixedDelay = 30000)
     public void publishPendingEvents() {
         List<OutboxEvent> batch = outboxEventRepository.findByStatusOrderByCreatedAtAsc(
                 OutboxStatus.PENDING,
@@ -48,33 +46,7 @@ public class OutboxPoller {
         );
 
         for (OutboxEvent event : batch) {
-            publish(event);
-        }
-    }
-
-    private void publish(OutboxEvent event) {
-        String topic = TOPICS_BY_EVENT_TYPE.get(event.getEventType());
-        if (topic == null) {
-            log.warn("No topic mapping for event type '{}' (outbox id {}); marking FAILED",
-                    event.getEventType(), event.getId());
-            event.setStatus(OutboxStatus.FAILED);
-            outboxEventRepository.save(event);
-            return;
-        }
-
-        try {
-            // .get() blocks until the broker acknowledges the send (or throws), which is what
-            // makes it safe to flip the row to PUBLISHED right after -- a fire-and-forget send()
-            // would let this method move on before knowing whether the message actually landed.
-            kafkaTemplate.send(topic, event.getAggregateId(), event.getPayload())
-                    .get(5, TimeUnit.SECONDS);
-            event.setStatus(OutboxStatus.PUBLISHED);
-            event.setPublishedAt(LocalDateTime.now());
-            outboxEventRepository.save(event);
-        } catch (Exception e) {
-            // Leave the row PENDING on any failure (timeout, broker unavailable, interrupted wait) --
-            // the next scheduled run will simply try it again.
-            log.warn("Failed to publish outbox event {} to topic {}: {}", event.getId(), topic, e.getMessage());
+            outboxPublisher.publish(event);
         }
     }
 }
