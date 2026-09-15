@@ -1,6 +1,7 @@
 package com.learn.inventoryservice.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.inventoryservice.cache.StockCache;
 import com.learn.inventoryservice.entity.OrderReservationItem;
 import com.learn.inventoryservice.entity.ProcessedEvent;
 import com.learn.inventoryservice.entity.ProductStock;
@@ -43,17 +44,20 @@ public class OrderCancelledListener {
     private final ProductStockRepository productStockRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final ObjectMapper objectMapper;
+    private final StockCache stockCache;
 
     public OrderCancelledListener(
             OrderReservationItemRepository orderReservationItemRepository,
             ProductStockRepository productStockRepository,
             ProcessedEventRepository processedEventRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            StockCache stockCache
     ) {
         this.orderReservationItemRepository = orderReservationItemRepository;
         this.productStockRepository = productStockRepository;
         this.processedEventRepository = processedEventRepository;
         this.objectMapper = objectMapper;
+        this.stockCache = stockCache;
     }
 
     @KafkaListener(topics = "order.cancelled", groupId = "inventory-service")
@@ -80,7 +84,12 @@ public class OrderCancelledListener {
                 if (stock != null) {
                     stock.setAvailableQuantity(stock.getAvailableQuantity() + item.getQuantity());
                 }
+                // Third write path to product_stock (alongside restock and
+                // OrderCreatedListener) -- same reasoning, without this a cached value would
+                // stay stale after a cancellation released stock back.
+                stockCache.delete(StockCache.itemKey(item.getProductId()));
             }
+            stockCache.delete(StockCache.LIST_KEY);
             orderReservationItemRepository.deleteByOrderId(event.getOrderId());
             log.info("Released reserved stock for cancelled order {}", event.getOrderId());
         }

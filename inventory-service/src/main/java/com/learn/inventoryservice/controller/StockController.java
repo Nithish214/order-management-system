@@ -34,7 +34,6 @@ import java.util.List;
 public class StockController {
 
     private static final Logger log = LoggerFactory.getLogger(StockController.class);
-    private static final String LIST_KEY = "stock:list";
 
     private final ProductStockRepository productStockRepository;
     private final StockCache stockCache;
@@ -46,24 +45,24 @@ public class StockController {
 
     @GetMapping
     public ResponseEntity<List<StockResponse>> getAllStock() {
-        List<StockResponse> cached = stockCache.getList(LIST_KEY, StockResponse.class);
+        List<StockResponse> cached = stockCache.getList(StockCache.LIST_KEY, StockResponse.class);
         if (cached != null) {
-            log.debug("Cache hit: {}", LIST_KEY);
+            log.debug("Cache hit: {}", StockCache.LIST_KEY);
             return ResponseEntity.ok(cached);
         }
 
-        log.debug("Cache miss: {}", LIST_KEY);
+        log.debug("Cache miss: {}", StockCache.LIST_KEY);
         List<StockResponse> stock = productStockRepository.findAll()
                 .stream()
                 .map(StockResponse::from)
                 .toList();
-        stockCache.set(LIST_KEY, stock);
+        stockCache.set(StockCache.LIST_KEY, stock);
         return ResponseEntity.ok(stock);
     }
 
     @GetMapping("/{productId}")
     public ResponseEntity<StockResponse> getStock(@PathVariable Long productId) {
-        String key = itemKey(productId);
+        String key = StockCache.itemKey(productId);
         StockResponse cached = stockCache.get(key, StockResponse.class);
         if (cached != null) {
             log.debug("Cache hit: {}", key);
@@ -92,13 +91,9 @@ public class StockController {
         // later, once this method returns and Spring's @Transactional proxy commits) is an
         // accepted tradeoff here, not worth the added complexity of a proper post-commit
         // hook for a single-writer admin action like restocking.
-        stockCache.delete(itemKey(productId));
-        stockCache.delete(LIST_KEY);
+        stockCache.delete(StockCache.itemKey(productId));
+        stockCache.delete(StockCache.LIST_KEY);
 
         return ResponseEntity.ok(response);
-    }
-
-    private String itemKey(Long productId) {
-        return "stock:" + productId;
     }
 }

@@ -1,6 +1,7 @@
 package com.learn.inventoryservice.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.inventoryservice.cache.StockCache;
 import com.learn.inventoryservice.entity.OrderReservationItem;
 import com.learn.inventoryservice.entity.ProcessedEvent;
 import com.learn.inventoryservice.entity.ProductStock;
@@ -36,19 +37,22 @@ public class OrderCreatedListener {
     private final OrderReservationItemRepository orderReservationItemRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private final StockCache stockCache;
 
     public OrderCreatedListener(
             ProductStockRepository productStockRepository,
             ProcessedEventRepository processedEventRepository,
             OrderReservationItemRepository orderReservationItemRepository,
             KafkaTemplate<String, String> kafkaTemplate,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            StockCache stockCache
     ) {
         this.productStockRepository = productStockRepository;
         this.processedEventRepository = processedEventRepository;
         this.orderReservationItemRepository = orderReservationItemRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
+        this.stockCache = stockCache;
     }
 
     @KafkaListener(topics = "order.created", groupId = "inventory-service")
@@ -93,7 +97,12 @@ public class OrderCreatedListener {
                 // to repeat the item list back to it.
                 orderReservationItemRepository.save(
                         new OrderReservationItem(event.getOrderId(), item.getProductId(), item.getQuantity()));
+                // This is a second write path to product_stock beyond the restock endpoint --
+                // without this, a cached stock:{id}/stock:list would silently go stale the
+                // moment an order actually reserved anything, not just on restock.
+                stockCache.delete(StockCache.itemKey(item.getProductId()));
             }
+            stockCache.delete(StockCache.LIST_KEY);
             kafkaTemplate.send("inventory.reserved", String.valueOf(event.getOrderId()),
                     reservedPayload(event.getOrderId()));
             log.info("Reserved stock for order {}", event.getOrderId());

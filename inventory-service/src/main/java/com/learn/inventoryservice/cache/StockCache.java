@@ -22,10 +22,22 @@ public class StockCache {
 
     private static final Logger log = LoggerFactory.getLogger(StockCache.class);
 
-    // A safety net, not the primary invalidation mechanism -- restock actively deletes the
-    // relevant key the moment stock changes (see StockController), so this only matters if
-    // a delete were ever missed entirely (a bug, or stock edited directly in the database).
+    // A safety net, not the primary invalidation mechanism -- every write path actively
+    // deletes the relevant key the moment stock changes (see StockController's restock, and
+    // OrderCreatedListener/OrderCancelledListener for the other two ways stock moves), so
+    // this only matters if a delete were ever missed entirely (a bug, or stock edited
+    // directly in the database).
     private static final Duration TTL = Duration.ofMinutes(5);
+
+    // The naming convention lives here, not in each caller -- three different classes now
+    // write to this cache (the restock endpoint, and both Kafka listeners that move stock
+    // as orders are created/cancelled), and they all need to agree on the exact same keys
+    // for invalidation to actually reach whatever a read populated.
+    public static final String LIST_KEY = "stock:list";
+
+    public static String itemKey(Long productId) {
+        return "stock:" + productId;
+    }
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
