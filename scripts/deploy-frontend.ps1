@@ -26,7 +26,15 @@ if ($BuildExitCode -ne 0) {
 }
 
 Write-Host "Syncing dist/ to s3://$FrontendBucket ..." -ForegroundColor Cyan
-aws s3 sync "$FrontendDir\dist" "s3://$FrontendBucket" --delete
+# --exclude "product-images/*" is not optional. --delete makes this command mirror the
+# bucket to match dist/ exactly, deleting anything in the bucket that dist/ doesn't have --
+# and dist/ (the built frontend) never contains product-images/ at all, since those are
+# uploaded separately, straight to S3, by admins using the app itself (see
+# ProductImageUploadService). Without this exclusion, a deploy did exactly what --delete
+# is supposed to do and wiped every uploaded product photo -- caught and recovered via S3
+# versioning the first time it happened, but the fix is to make it structurally
+# impossible, not to rely on remembering versioning saved it that once.
+aws s3 sync "$FrontendDir\dist" "s3://$FrontendBucket" --delete --exclude "product-images/*"
 
 Write-Host "Invalidating CloudFront cache so viewers get the new build immediately..." -ForegroundColor Cyan
 $InvalidationId = aws cloudfront create-invalidation --distribution-id $CloudFrontDistributionId --paths "/*" --query "Invalidation.Id" --output text
