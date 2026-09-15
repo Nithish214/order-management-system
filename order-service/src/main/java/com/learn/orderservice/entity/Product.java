@@ -25,4 +25,10 @@ public class Product {
 
     @Column(name = "unit_price", nullable = false)
     private java.math.BigDecimal unitPrice;
+
+    // Null until an admin uploads one. Points at the final CloudFront URL, not the S3 key --
+    // the actual bytes live in S3 (bucket: the same one hosting the frontend, under
+    // product-images/), this column just remembers where.
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
 }

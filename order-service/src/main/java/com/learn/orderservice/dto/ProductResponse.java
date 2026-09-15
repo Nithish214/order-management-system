@@ -14,6 +14,9 @@ public class ProductResponse {
     private String sku;
     private String name;
     private BigDecimal unitPrice;
+    // Null for any product without an uploaded image yet -- the frontend shows a plain
+    // placeholder in that case rather than a broken image icon.
+    private String imageUrl;
 
     public static ProductResponse from(Product product) {
         ProductResponse response = new ProductResponse();
@@ -21,6 +24,7 @@ public class ProductResponse {
         response.setSku(product.getSku());
         response.setName(product.getName());
         response.setUnitPrice(product.getUnitPrice());
+        response.setImageUrl(product.getImageUrl());
         return response;
     }
 }
