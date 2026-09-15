@@ -1,21 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
+import { uploadProductImage } from "../api/productImages";
 import { useCart } from "../cart/CartContext";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import "./ProductsPage.css";
 
+// This bucket also hosts this app's own frontend code -- kept in sync with the exact
+// same allowlist Order Service enforces server-side (ProductImageUploadService), so a
+// rejected file type shows up immediately as a clear message here instead of only after
+// a round trip to the backend.
+const ACCEPTED_IMAGE_TYPES = "image/jpeg,image/png,image/webp";
+
 export default function ProductsPage() {
   const apiFetch = useApiFetch();
   const cart = useCart();
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [placingOrder, setPlacingOrder] = useState(false);
+  // Which product the next file the user picks belongs to -- set the instant they click
+  // "Upload image" on a specific row, read back once the shared hidden <input> fires its
+  // onChange. uploadingId separately drives the per-row "Uploading..." state.
+  const [uploadTargetId, setUploadTargetId] = useState(null);
+  const [uploadingId, setUploadingId] = useState(null);
 
   // useEffect runs a side effect (anything that reaches outside this component, like a
   // network call) *after* React renders. The dependency array at the end, [], is what
@@ -87,6 +100,37 @@ export default function ProductsPage() {
     }
   }
 
+  // One shared hidden file input for every row, rather than one per product -- a file
+  // input has no visual presence of its own anyway, so there's nothing gained by
+  // duplicating it, and this way there's exactly one onChange handler to reason about.
+  function handleUploadClick(productId) {
+    setUploadTargetId(productId);
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileSelected(event) {
+    const file = event.target.files?.[0];
+    // Reset immediately so picking the exact same file again still fires onChange next
+    // time -- browsers otherwise treat "same file, same input" as no change at all.
+    event.target.value = "";
+    if (!file || uploadTargetId == null) return;
+
+    const productId = uploadTargetId;
+    setUploadingId(productId);
+    setError(null);
+    try {
+      const updated = await uploadProductImage(apiFetch, productId, file);
+      setProducts((prev) =>
+        prev.map((product) => (product.id === updated.id ? { ...product, imageUrl: updated.imageUrl } : product))
+      );
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setUploadingId(null);
+      setUploadTargetId(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="products-page">
@@ -109,18 +153,54 @@ export default function ProductsPage() {
 
       {error && <p className="text-error page-error">{error}</p>}
 
+      {/* Shared by every row -- see handleUploadClick/handleFileSelected. hidden (not a
+          display:none style) is the plain HTML way to keep this out of the layout and
+          off-screen while still fully usable via fileInputRef.current.click(). */}
+      <input
+        type="file"
+        accept={ACCEPTED_IMAGE_TYPES}
+        ref={fileInputRef}
+        onChange={handleFileSelected}
+        hidden
+      />
+
       <div className="products-layout">
         <section className="product-list">
           {products.map((product) => (
             <div className="product-row" key={product.id}>
-              <div className="product-info">
-                <p className="product-name">{product.name}</p>
-                <p className="product-sku text-muted">{product.sku}</p>
+              <div className="product-row-main">
+                <div className="product-thumb">
+                  {product.imageUrl ? (
+                    <img src={product.imageUrl} alt={product.name} />
+                  ) : (
+                    <div className="product-thumb-placeholder" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="product-info">
+                  <p className="product-name">{product.name}</p>
+                  <p className="product-sku text-muted">{product.sku}</p>
+                </div>
+                <p className="product-price">${product.unitPrice.toFixed(2)}</p>
+                <button className="btn-secondary" onClick={() => cart.addItem(product)}>
+                  Add to cart
+                </button>
               </div>
-              <p className="product-price">${product.unitPrice.toFixed(2)}</p>
-              <button className="btn-secondary" onClick={() => cart.addItem(product)}>
-                Add to cart
-              </button>
+              {isAdmin && (
+                <div className="product-row-admin">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => handleUploadClick(product.id)}
+                    disabled={uploadingId === product.id}
+                  >
+                    {uploadingId === product.id
+                      ? "Uploading..."
+                      : product.imageUrl
+                        ? "Change image"
+                        : "Upload image"}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </section>

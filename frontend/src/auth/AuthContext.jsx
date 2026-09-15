@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { bffLogin, bffLogout, bffRefresh } from "./bff";
+import { decodeJwtPayload } from "../utils/jwt";
 
 // React Context solves one specific problem: passing data (here, the access token and
 // login/logout functions) to components anywhere in the tree without manually threading
@@ -85,10 +86,26 @@ export function AuthProvider({ children }) {
     setAccessToken(null);
   }, [accessToken]);
 
+  // Display-only -- decides whether to *show* admin-only controls (the product image
+  // upload button), nothing more. The actual enforcement happens server-side, every
+  // time, regardless of this value: the Gateway independently re-validates the token's
+  // signature and re-reads its cognito:groups claim on every request (see
+  // SecurityConfig's hasAuthority("ROLE_admin") rules). A user could, in principle,
+  // tamper with their own browser to make this read true -- all that would get them is a
+  // visible button that still 403s when clicked, since this check runs again for real on
+  // the server that actually matters.
+  const isAdmin = useMemo(() => {
+    if (!accessToken) return false;
+    const payload = decodeJwtPayload(accessToken);
+    const groups = payload?.["cognito:groups"];
+    return Array.isArray(groups) && groups.includes("admin");
+  }, [accessToken]);
+
   const value = {
     accessToken,
     isAuthenticated: accessToken !== null,
     isBootstrapping,
+    isAdmin,
     login,
     logout,
     refreshAccessToken,

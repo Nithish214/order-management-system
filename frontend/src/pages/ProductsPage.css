@@ -59,16 +59,52 @@
 }
 
 .product-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
   padding: var(--space-3) 0;
   border-bottom: var(--border-width) solid var(--color-border);
 }
 
 .product-row:first-child {
   border-top: var(--border-width) solid var(--color-border);
+}
+
+.product-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* A fixed-size square, bordered like every other small control on this page -- not
+   rounded into a "product card" avatar, just a quiet thumbnail sitting in a list row. */
+.product-thumb {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.product-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* No image yet -- a plain, empty tinted square, never a broken-image icon. */
+.product-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  background: var(--color-border);
+}
+
+/* Indented to align under the name/sku text, past the thumbnail -- admin-only, so this
+   entire block simply doesn't render for anyone else (see ProductsPage.jsx's isAdmin
+   check), not just hidden with CSS. */
+.product-row-admin {
+  margin: var(--space-2) 0 0 calc(48px + var(--space-3));
 }
 
 .product-info {
