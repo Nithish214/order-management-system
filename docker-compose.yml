@@ -1,6 +1,12 @@
 version: '3.9'
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: order-redis
+    ports:
+      - "6379:6379"
+
   oracle:
     image: gvenzl/oracle-xe:21-slim
     container_name: order-oracle

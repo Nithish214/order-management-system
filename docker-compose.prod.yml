@@ -11,6 +11,32 @@ version: '3.9'
 # file is also recommended as a safety net against OOM kills.
 
 services:
+  # Cache-aside layer in front of Inventory Service's read-heavy product endpoints. No
+  # volume, unlike Kafka's implicit log storage or RDS -- a cache is, by definition, just
+  # a copy of data that already lives durably somewhere else (Postgres, here). Losing it
+  # on a container restart costs nothing but a handful of cold reads that immediately
+  # repopulate it from the database -- there's no real data to lose, so there's nothing
+  # worth the complexity of persisting.
+  #
+  # No `ports:` mapping -- deliberately not reachable from outside Docker's internal
+  # network at all, not even bound to the host. Redis has NO AUTHENTICATION by default:
+  # anyone who could reach port 6379 could read every cached value, or worse, use
+  # well-documented exploits against open Redis instances (e.g. abusing CONFIG SET to
+  # write an SSH key to disk) to get a foothold on the box entirely. Keeping it off the
+  # public internet isn't just good hygiene here, it's the *only* thing standing between
+  # "cache" and "open door" -- there's no password to fall back on.
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    # A resource-constrained t3.micro deserves a hard ceiling on any new memory consumer,
+    # not just trust that a handful of small product JSON blobs will always stay small.
+    # allkeys-lru: once that ceiling is hit, evict the least-recently-used key to make
+    # room, rather than erroring out -- exactly the right failure mode for a cache (a
+    # forced-early miss is harmless; refusing writes wouldn't be) as opposed to a
+    # datastore, where silently discarding data would be a real problem.
+    command: redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+
   kafka:
     image: apache/kafka:3.7.0
     container_name: kafka
@@ -64,6 +90,7 @@ services:
     container_name: inventory-service
     depends_on:
       - kafka
+      - redis
     environment:
       SPRING_PROFILES_ACTIVE: prod
       DB_HOST: ${RDS_HOST}
@@ -75,6 +102,11 @@ services:
       DB_USERNAME: ${RDS_USERNAME}
       DB_PASSWORD: ${RDS_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # "redis" resolves via Compose's embedded DNS to the redis service above, same
+      # principle as "kafka" resolving to the Kafka broker -- no host port needed for
+      # this container-to-container hop.
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       JAVA_OPTS: "-Xmx140m"
     ports:
       - "8082:8082"

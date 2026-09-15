@@ -65,6 +65,17 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- Pulls in Lettuce (not Jedis) as the actual Redis client, Spring Boot's default
+             since 2.x. Lettuce is Netty-based and asynchronous under the hood, and its
+             connections are thread-safe to share, so one connection (or a small pool)
+             comfortably serves the whole app; Jedis connections aren't thread-safe, so
+             using it well means managing a connection pool yourself. Nothing to configure
+             here to get this, it's just what this starter brings in by default. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
