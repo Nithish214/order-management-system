@@ -54,6 +54,13 @@ public class SecurityConfig {
                         // auth on OPTIONS would reject every preflight, which silently blocks the real
                         // request too, since the browser never proceeds past a failed preflight.
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // The Docker healthcheck (see docker-compose.prod.yml) calls this directly
+                        // with plain wget, no token -- this is the Gateway's OWN Spring Security
+                        // instance guarding requests to itself (separate from the auth it enforces
+                        // on the routes it proxies to Order/Inventory Service), so without this rule
+                        // the healthcheck would get a 401 and the Gateway would look permanently
+                        // unhealthy regardless of whether it's actually fine.
+                        .pathMatchers("/actuator/health").permitAll()
                         // Most specific rule next: restock additionally requires the "admin" group.
                         // hasAuthority checks for the exact "ROLE_admin" authority our converter below
                         // produces from the token's cognito:groups claim.

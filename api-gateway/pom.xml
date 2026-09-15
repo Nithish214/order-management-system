@@ -43,6 +43,13 @@
             <artifactId>spring-cloud-starter-gateway</artifactId>
         </dependency>
 
+        <!-- Exposes /actuator/health, which works the same on the reactive (WebFlux) stack as
+             it does on MVC. Backs docker-compose.prod.yml's healthcheck for this service. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Resource Server, not OAuth2 Client: the Gateway only ever validates a Bearer token
              it's handed (Postman/curl get tokens directly from Cognito's API); it never
              initiates its own login flow, so it doesn't need to act as an OAuth2 client. -->

@@ -82,6 +82,17 @@ services:
     ports:
       - "8081:8081"
     restart: unless-stopped
+    # Reports this container's status as healthy/unhealthy in `docker ps`/`docker inspect` --
+    # on its own this does NOT make Docker restart anything (that's a Swarm-only behavior);
+    # see the autoheal service below, which is what actually acts on this. start_period gives
+    # the JVM room to finish booting (Flyway, Hibernate, Kafka consumer setup) before a slow
+    # startup counts as a failure.
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   inventory-service:
     build:
@@ -111,6 +122,12 @@ services:
     ports:
       - "8082:8082"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   api-gateway:
     build:
@@ -130,3 +147,31 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # Plain Docker (unlike Swarm) never acts on a container's healthcheck status by itself --
+  # it only ever reports "unhealthy" in docker ps/inspect and otherwise does nothing. This is
+  # the piece that actually closes the loop: watches every container's health status via the
+  # Docker socket, and `docker kill`s any container reporting unhealthy, which then triggers
+  # that container's own `restart: unless-stopped` policy to bring it back up fresh. This is
+  # specifically for "alive but stuck" (a JVM wedged under memory pressure, still running,
+  # never actually crashing on its own) -- restart policies alone only ever catch an outright
+  # crash.
+  #
+  # Mounting the Docker socket gives this container real control over every other container
+  # on the host -- a genuine, standard tradeoff for this exact pattern (autoheal is a small,
+  # single-purpose, widely-used image with no exposed ports of its own), not something to
+  # wave away, but reasonable here for the actual capability it buys.
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
