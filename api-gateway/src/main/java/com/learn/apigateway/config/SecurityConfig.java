@@ -75,6 +75,11 @@ public class SecurityConfig {
                         // hasAuthority checks for the exact "ROLE_admin" authority our converter below
                         // produces from the token's cognito:groups claim.
                         .pathMatchers(HttpMethod.POST, "/stock/*/restock").hasAuthority("ROLE_admin")
+                        // Same admin-only reasoning for product image uploads: any valid token can
+                        // still read /products (see the final rule below), but only an admin can mint
+                        // an upload URL or attach an image to a product.
+                        .pathMatchers(HttpMethod.POST, "/products/*/image-upload-url").hasAuthority("ROLE_admin")
+                        .pathMatchers(HttpMethod.PUT, "/products/*/image").hasAuthority("ROLE_admin")
                         // Every other route just needs any validly-signed, unexpired token.
                         .anyExchange().authenticated()
                 )

@@ -30,6 +30,20 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
+
+# Backs ProductImageUploadService's presigned S3 URLs. The bucket is the same one already
+# hosting the frontend (see scripts/config.ps1's $FrontendBucket) -- reusing it means no
+# new bucket, no new CloudFront distribution, and (per that bucket's existing policy)
+# anything written under product-images/ is immediately servable at this same CDN domain.
+# None of these are secrets -- the bucket name and CDN domain are already public (anyone
+# can see them just by loading the site), same reasoning as the Cognito issuer-uri default.
+aws:
+  region: ${AWS_REGION:eu-west-1}
+
+products:
+  image-bucket: ${PRODUCT_IMAGE_BUCKET:order-management-frontend-244689414185}
+  image-cdn-domain: ${PRODUCT_IMAGE_CDN_DOMAIN:dgzc0rv8gh9y.cloudfront.net}
+
 logging:
   level:
     org.hibernate.SQL: INFO
