@@ -185,13 +185,14 @@ That's the entire log setup — no agent, no config file, just Docker sending ea
 | EBS storage (EC2 disk) | 30 GB/month | Don't over-provision past ~20-30GB |
 | RDS db.t3/t4g.micro | 750 hrs/month, 20GB storage, 20GB backups, 12 months* | Same combined-hours caveat as EC2; don't leave old RDS instances running from earlier experiments |
 | Data transfer out | 100 GB/month | A learning project won't come close |
-| Kafka | $0 — self-hosted on the EC2 instance you already have | N/A — this was the whole point of not using MSK |
+| Kafka/Redpanda | $0 — self-hosted on the EC2 instance you already have | N/A — this was the whole point of not using MSK |
+| **t3.small (if resized, see Phase 7)** | **Not free-tier eligible at any account age** | ~$0.0208/hour in eu-west-1 (~$15/month at 24/7) — a real, ongoing cost, only taken on after directly proving t3.micro's 1GB RAM was causing genuine multi-second stalls |
 | CloudWatch Logs | 5GB ingestion + 5GB storage, **always-free** (not time-limited) | Set retention (see above) — indefinite retention slowly costs more over time |
 | CloudWatch metrics/alarms | 10 custom metrics, 10 alarms, always-free | Stick to EC2's free defaults; only add the Agent if you specifically want memory metrics |
 | Elastic IP (if you allocate one) | Free **only while attached to a running instance** | An allocated-but-unattached Elastic IP bills hourly — a classic surprise-bill trap. Either don't allocate one (the default public IP is fine and simpler for a learning project) or remember to release it |
 | Cognito User Pool (Essentials tier) | **10,000 MAUs/month free, always-free** — not time-limited, not tied to account age ([AWS's own pricing page](https://aws.amazon.com/cognito/pricing/)) | A "MAU" only counts if a user does something (sign-in, token refresh, etc.) that month — a couple of test users will never come close to 10,000 |
 
-*AWS's free-tier terms have shifted for newer accounts — check your own account's **Billing → Free Tier** page to confirm exactly what applies to you before assuming these numbers.
+*AWS's free-tier terms have shifted for newer accounts — check your own account's **Billing → Free Tier** page to confirm exactly what applies to you before assuming these numbers. Specifically: accounts created after AWS's mid-2024 policy change get a **fixed signup credit (commonly $200, valid 6 months)** instead of 12 months of always-free hours on services like EC2/RDS — usage still shows as "free" in the sense that a credit automatically offsets it (confirmed on this project's own account via `aws ce get-cost-and-usage --group-by Type=DIMENSION,Key=RECORD_TYPE`, which shows a `Credit` line exactly offsetting a `Usage` line each month), but it's drawing down a finite balance, not a renewing monthly allowance.
 
 **Biggest realistic risk for this specific project**: leaving the EC2 instance (and RDS) running 24/7 for a full month without noticing, out of the habit of just leaving it be since it's "free." **Stop** (not terminate — stopping preserves your EBS volume and RDS data) both when you're not actively using them. Set the AWS Budget alert regardless — it costs nothing and catches the mistake either way.
 
@@ -456,3 +457,65 @@ domain purchase, no Elastic IP.
   instead of `http://<ec2-ip>:8080`. Since this is a stable domain instead of an IP that
   changes on every restart, `scripts/deploy-frontend.ps1` no longer needs to rewrite it —
   that script now only rebuilds and republishes when the frontend's own code changes.
+
+---
+
+# Phase 7 — Resizing to t3.small and replacing Kafka with Redpanda
+
+Two changes made together, after directly proving (not guessing) that the t3.micro's 1GB
+RAM was causing real, multi-second request stalls.
+
+## How this was actually diagnosed
+
+A live request occasionally took **10+ seconds** to respond (`POST /orders`, `GET /stock`),
+with no obvious cause at the application level. Rather than assume a cause, each step was
+verified against real evidence before acting on it:
+
+1. **Ruled out RDS/network**: the health check's own DB connectivity check kept succeeding
+   throughout, so the database itself wasn't the bottleneck.
+2. **Ruled out disk space**: `df -h` showed 6.9GB free, nowhere close to a problem.
+3. **Found the real signal by checking something unrelated on purpose**: Kafka's consumer
+   connections (nothing to do with the slow endpoint) were *also* dropping at the same
+   moment — evidence pointing at something systemic, not a bug in one specific code path.
+4. **Confirmed via `free -h`**: heavy swap usage (995Mi of 1Gi in use).
+5. **Got direct proof, not just correlation**: Kafka is the one service that already had
+   JVM GC logging enabled. Its actual GC log showed the smoking gun --
+   `Pause Young (Allocation Failure)` events up to **4952ms long** -- genuine, multi-second,
+   whole-JVM freezes caused by the heap being too small for the box's available memory.
+
+## What changed
+
+**EC2 resized from t3.micro (1GB RAM) to t3.small (2GB)** -- requires stopping the instance
+first (`aws ec2 stop-instances`), changing its type
+(`aws ec2 modify-instance-attribute --instance-type t3.small`), then starting it again; it
+gets a new public IP each time, so `scripts/start-all.ps1`'s DuckDNS update step matters
+even more here.
+
+**Kafka replaced with Redpanda** in `docker-compose.prod.yml`. Redpanda speaks the identical
+Kafka wire protocol -- `KafkaTemplate`, `@KafkaListener`, topic names, consumer groups, the
+outbox pattern, the idempotent-consumer pattern -- none of the Java code changed at all,
+only the broker container. The reason for the swap specifically: Redpanda is written in
+C++, not Java, so it has no JVM and no garbage collector -- the exact mechanism the GC log
+proved was causing multi-second pauses structurally cannot happen in it, regardless of how
+tight memory gets.
+
+## Measured results (before -> after, on the live system)
+
+| Metric | Before (t3.micro, Kafka) | After (t3.small, Redpanda) |
+|---|---|---|
+| `POST /orders` worst case | 10.89s | under 1s |
+| Outbox-to-broker latency | 1.9s-4.8s | 39-629ms |
+| Broker memory | ~332MB | ~63MB |
+| Broker process count | 97 | 3 |
+| Swap in use | 995Mi/1Gi (nearly full) | ~88Mi/1Gi |
+
+Full event-driven pipeline re-verified end-to-end against Redpanda: order creation ->
+confirmation, restock, and cancellation-with-stock-release all working correctly.
+
+## Cost impact
+
+t3.small costs real money continuously (no free-tier hours the way t3.micro nominally had) --
+roughly $0.0208/hour in eu-west-1, so ~$15/month at 24/7, less with the existing
+stop/start habit. See the cost breakdown above for why this account's actual free-tier
+situation (a fixed signup credit, not renewing monthly hours) makes this an easy trade
+against a $150+ balance rather than a new recurring expense from zero.
