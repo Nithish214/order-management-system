@@ -1,7 +1,7 @@
 version: '3.9'
 
 # Runs on the EC2 instance. Unlike docker-compose.yml (local dev: just Oracle), this brings
-# up the whole application -- Kafka plus all 3 services -- since Postgres now lives on RDS,
+# up the whole application -- Kafka plus all 4 services -- since Postgres now lives on RDS,
 # outside Docker entirely. RDS_HOST/RDS_USERNAME/RDS_PASSWORD come from a .env file that
 # lives only on the EC2 instance and is NOT committed to git (see DEPLOYMENT.md) -- Docker
 # Compose reads .env automatically for the ${...} substitutions below.
@@ -10,8 +10,9 @@ version: '3.9'
 # a t3.small (2GB RAM) as of the Redpanda migration -- upgraded from a t3.micro (1GB) after
 # directly proving, via Kafka's own GC log, multi-second stop-the-world pauses under memory
 # pressure. Redpanda (below) replaces Kafka specifically to remove the JVM/GC-pause class of
-# problem entirely; the 3 Spring Boot services are still JVMs and still benefit from the
-# extra headroom. See DEPLOYMENT.md for the swap file, still kept as a safety net.
+# problem entirely; the 4 Spring Boot services (Order, Inventory, Payment, Gateway) are
+# still JVMs and still benefit from the extra headroom. See DEPLOYMENT.md for the swap
+# file, still kept as a safety net.
 
 services:
   # Cache-aside layer in front of Inventory Service's read-heavy product endpoints. No
@@ -133,6 +134,38 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # Pure Kafka consumer/producer -- reacts to inventory.reserved, publishes
+  # payment.completed/payment.failed. No SPRING_PROFILES_ACTIVE: this service is
+  # Postgres-only from day one, unlike Order/Inventory Service's Oracle-vs-Postgres
+  # profile split. Not routed through api-gateway at all -- it has no REST API for the
+  # frontend to call, so it's not in api-gateway's depends_on either.
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+    container_name: payment-service
+    depends_on:
+      - redpanda
+    environment:
+      DB_HOST: ${RDS_HOST}
+      DB_PORT: 5432
+      # Separate database on the same RDS instance, same isolation reasoning as
+      # inventorydb/orderdb -- see paymentdb's creation in DEPLOYMENT.md.
+      DB_NAME: paymentdb
+      DB_USERNAME: ${RDS_USERNAME}
+      DB_PASSWORD: ${RDS_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      JAVA_OPTS: "-Xmx140m"
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
       interval: 30s
       timeout: 5s
       retries: 3

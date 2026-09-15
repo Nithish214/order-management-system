@@ -16,6 +16,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -103,8 +104,12 @@ public class OrderCreatedListener {
                 stockCache.delete(StockCache.itemKey(item.getProductId()));
             }
             stockCache.delete(StockCache.LIST_KEY);
+            // totalAmount is simply forwarded from order.created, not recomputed -- this
+            // service already has it in hand, and it's the one piece of information the new
+            // Payment Service (a consumer of this exact topic) needs but has no other way to
+            // get, since it never sees order.created itself.
             kafkaTemplate.send("inventory.reserved", String.valueOf(event.getOrderId()),
-                    reservedPayload(event.getOrderId()));
+                    reservedPayload(event.getOrderId(), event.getTotalAmount()));
             log.info("Reserved stock for order {}", event.getOrderId());
         } else {
             String reason = String.join("; ", shortages);
@@ -114,9 +119,10 @@ public class OrderCreatedListener {
         }
     }
 
-    private String reservedPayload(Long orderId) {
+    private String reservedPayload(Long orderId, BigDecimal totalAmount) {
         return """
-                {"eventId":"%s","orderId":%d,"status":"RESERVED"}""".formatted(UUID.randomUUID(), orderId);
+                {"eventId":"%s","orderId":%d,"status":"RESERVED","totalAmount":%s}"""
+                .formatted(UUID.randomUUID(), orderId, totalAmount);
     }
 
     private String failedPayload(Long orderId, String reason) {

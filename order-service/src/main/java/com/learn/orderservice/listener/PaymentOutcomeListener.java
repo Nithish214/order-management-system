@@ -1,0 +1,40 @@
+package com.learn.orderservice.listener;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.orderservice.entity.OrderStatus;
+import com.learn.orderservice.event.PaymentOutcomeEvent;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+// Closes the loop Payment Service's InventoryReservedListener started: an order only
+// reaches CONFIRMED once payment has actually succeeded, not the moment stock was set
+// aside for it (see InventoryOutcomeListener's comment for why that shortcut was
+// removed). Same OrderStatusUpdater as InventoryOutcomeListener -- "don't clobber a
+// customer's own cancellation" and "log unknown order" apply identically here, so that
+// logic isn't repeated.
+@Service
+public class PaymentOutcomeListener {
+
+    private final ObjectMapper objectMapper;
+    private final OrderStatusUpdater orderStatusUpdater;
+
+    public PaymentOutcomeListener(ObjectMapper objectMapper, OrderStatusUpdater orderStatusUpdater) {
+        this.objectMapper = objectMapper;
+        this.orderStatusUpdater = orderStatusUpdater;
+    }
+
+    @KafkaListener(topics = "payment.completed", groupId = "order-service")
+    @Transactional
+    public void onPaymentCompleted(String message) throws Exception {
+        PaymentOutcomeEvent event = objectMapper.readValue(message, PaymentOutcomeEvent.class);
+        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.CONFIRMED, null);
+    }
+
+    @KafkaListener(topics = "payment.failed", groupId = "order-service")
+    @Transactional
+    public void onPaymentFailed(String message) throws Exception {
+        PaymentOutcomeEvent event = objectMapper.readValue(message, PaymentOutcomeEvent.class);
+        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.REJECTED, event.getReason());
+    }
+}

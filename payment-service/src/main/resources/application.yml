@@ -1,0 +1,43 @@
+# Postgres-only, no application-prod.yml/SPRING_PROFILES_ACTIVE split like Order/Inventory
+# Service have -- those exist to switch between local-dev Oracle and deployed-AWS Postgres,
+# a distinction this service never had (it's new, and RDS Postgres was already the only
+# database in play by the time it was built). The localhost/postgres defaults below just
+# mean it also runs against a plain local Postgres for manual testing, without requiring
+# docker-compose.prod.yml's env vars to be set.
+server:
+  port: 8083
+
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:paymentdb}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        show_sql: false
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: payment-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+logging:
+  level:
+    org.hibernate.SQL: INFO
