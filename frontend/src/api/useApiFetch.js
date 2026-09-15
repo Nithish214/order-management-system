@@ -15,33 +15,49 @@ const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL;
 // that lists this function as a dependency (Phase B's ProductsPage does exactly that)
 // would then re-run on *every* render, not just when the token actually changes --
 // for a data-fetching effect, that's an infinite loop (fetch -> state update -> render
-// -> "new" function -> effect fires again -> fetch -> ...). [accessToken, logout] as the
-// dependency array means a new function is only handed out when the token itself
-// actually changes (login/logout), which is the only time the old one would be wrong.
+// -> "new" function -> effect fires again -> fetch -> ...). [accessToken, logout,
+// refreshAccessToken] as the dependency array means a new function is only handed out
+// when one of those actually changes (login/logout/refresh), which is the only time the
+// old one would be wrong.
 export function useApiFetch() {
-  const { accessToken, logout } = useAuth();
+  const { accessToken, logout, refreshAccessToken } = useAuth();
 
   return useCallback(
     async function apiFetch(path, options = {}) {
-      const response = await fetch(`${GATEWAY_URL}${path}`, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          ...options.headers,
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      async function attempt(token) {
+        return fetch(`${GATEWAY_URL}${path}`, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            ...options.headers,
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+
+      let response = await attempt(accessToken);
 
       if (response.status === 401) {
-        // The token is missing/invalid/expired -- the Gateway said so itself. Clearing
-        // it here flips AuthContext's isAuthenticated to false; App's router (Phase B)
-        // redirects to /login whenever that's false.
-        logout();
-        throw new Error("Session expired -- please log in again");
+        // An access token expiring mid-session is now the *expected* case, not a fatal
+        // one -- it only lives about an hour. Try the httpOnly refresh cookie once
+        // (silently minting a new access token, no re-login needed) before giving up;
+        // this is the entire reason the BFF (AuthContext's refreshAccessToken) exists.
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          response = await attempt(newToken);
+        }
+
+        // Still 401 after a fresh token (or there was no cookie to refresh from at
+        // all) -- this really is a dead session: log the user out and send them back
+        // to /login, same as before.
+        if (response.status === 401) {
+          logout();
+          throw new Error("Session expired -- please log in again");
+        }
       }
 
       return response;
     },
-    [accessToken, logout]
+    [accessToken, logout, refreshAccessToken]
   );
 }

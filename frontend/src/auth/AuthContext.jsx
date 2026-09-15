@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useState } from "react";
-import { login as cognitoLogin } from "./cognito";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { bffLogin, bffLogout, bffRefresh } from "./bff";
 
 // React Context solves one specific problem: passing data (here, the access token and
 // login/logout functions) to components anywhere in the tree without manually threading
@@ -15,26 +15,37 @@ export function AuthProvider({ children }) {
   // localStorage, including tokens, and exfiltrate them. A plain JS variable inside
   // React state isn't reachable the same way from arbitrary injected scripts in the
   // way storage APIs are, and it disappears the instant the tab closes or reloads.
-  // The real tradeoff: refreshing the page logs you out (there's no BFF here to hold a
-  // refresh token safely in an httpOnly cookie instead) -- an accepted limitation for
-  // a learning project's v1, not something to silently work around with localStorage.
   const [accessToken, setAccessToken] = useState(null);
+
+  // True only until the silent-refresh check below finishes. Without this, a page
+  // reload would render <ProtectedRoute> for one instant with isAuthenticated still
+  // false (accessToken starts as null every time, on every mount) and bounce an
+  // already-logged-in user to /login before bffRefresh() below has had a chance to
+  // find their still-valid session.
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+
+  // Runs once, on first mount. This is the actual fix for "reloading the page logs you
+  // out": the refresh token now lives in an HttpOnly cookie the browser already sent
+  // along with this request automatically (see bffRefresh's credentials: "include") --
+  // there's a real, still-valid session to recover here that simply wasn't visible to
+  // any JavaScript, this component included, before the BFF existed.
+  useEffect(() => {
+    bffRefresh()
+      .then((result) => {
+        if (result) setAccessToken(result.accessToken);
+      })
+      .finally(() => setIsBootstrapping(false));
+  }, []);
 
   // useCallback memoizes the function itself -- without it, AuthProvider re-rendering
   // for any reason would hand out a brand-new `login`/`logout` function reference each
   // time, even though the *behavior* never changed. That matters because other code
-  // (useApiFetch, below) puts these in dependency arrays; a function that's "different"
-  // on every render, even when nothing meaningful changed, makes anything depending on
-  // it re-run constantly. The empty dependency array here is valid because setAccessToken
-  // (from useState) is itself guaranteed stable by React across the component's lifetime.
+  // (useApiFetch) puts these in dependency arrays; a function that's "different" on
+  // every render, even when nothing meaningful changed, makes anything depending on it
+  // re-run constantly.
   const login = useCallback(async (email, password) => {
-    const result = await cognitoLogin(email, password);
-    // We only ever keep the Access token -- see the id-token-vs-access-token note in
-    // the write-up. The Gateway's Resource Server config accepts either (both are
-    // signed by the same Cognito keys), but Access tokens are the ones meant for APIs,
-    // and only they reliably carry cognito:groups the way our restock authorization
-    // check depends on.
-    setAccessToken(result.AccessToken);
+    const result = await bffLogin(email, password);
+    setAccessToken(result.accessToken);
 
     // Sync the real email onto app_user right away -- a plain fetch here rather than
     // useApiFetch(), deliberately: useApiFetch() reads the token via useAuth(), but
@@ -47,21 +58,40 @@ export function AuthProvider({ children }) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${result.AccessToken}`,
+        Authorization: `Bearer ${result.accessToken}`,
       },
       body: JSON.stringify({ email }),
     }).catch(() => {});
   }, []);
 
-  const logout = useCallback(() => {
-    setAccessToken(null);
+  // The one function that actually needs a fresh access token mid-session, without the
+  // user doing anything -- useApiFetch calls this when the Gateway says the current
+  // token is expired, before falling back to a real logout. Returns the new token
+  // directly (not just via state) since the caller needs it immediately, in the same
+  // tick, to retry the request that just failed -- state updates aren't available that
+  // fast.
+  const refreshAccessToken = useCallback(async () => {
+    const result = await bffRefresh();
+    setAccessToken(result ? result.accessToken : null);
+    return result ? result.accessToken : null;
   }, []);
+
+  const logout = useCallback(() => {
+    // Best-effort: also tells the Gateway to clear the refresh cookie (and revoke it at
+    // Cognito) -- but this tab treats the user as logged out immediately regardless,
+    // the instant the in-memory token below is cleared, not once this network call
+    // returns.
+    bffLogout(accessToken);
+    setAccessToken(null);
+  }, [accessToken]);
 
   const value = {
     accessToken,
     isAuthenticated: accessToken !== null,
+    isBootstrapping,
     login,
     logout,
+    refreshAccessToken,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

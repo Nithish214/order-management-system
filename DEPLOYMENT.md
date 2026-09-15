@@ -519,3 +519,66 @@ roughly $0.0208/hour in eu-west-1, so ~$15/month at 24/7, less with the existing
 stop/start habit. See the cost breakdown above for why this account's actual free-tier
 situation (a fixed signup credit, not renewing monthly hours) makes this an easy trade
 against a $150+ balance rather than a new recurring expense from zero.
+
+# Phase 8 — BFF for the refresh token
+
+## The problem
+
+Cognito's login response (`InitiateAuth`) always includes three things: an Access token,
+an ID token, and a Refresh token. Since Phase 4, the frontend only ever kept the Access
+token, in a plain React state variable (see `AuthContext.jsx`'s original comment) --
+deliberately not `localStorage`, to keep it out of reach of an XSS payload. The Refresh
+token was simply thrown away every time: there was nowhere safe to put it in a pure
+static frontend (an S3/CloudFront bucket, no server of its own at all). The accepted
+consequence was that reloading the page always logged you out -- the Access token dies
+with the React state that held it, and there was no Refresh token left to silently get a
+new one.
+
+## The fix: a small Backend-For-Frontend, folded into the existing Gateway
+
+A BFF is just "a server that sits between the browser and the real backend/identity
+provider, specifically so it can hold something the browser itself isn't safe to hold."
+Here, that something is the Refresh token. Rather than stand up a new service (another
+JVM, more memory on an already resource-watched t3.small), this was added directly to
+api-gateway, which was already the frontend's one and only entry point:
+
+- **`AuthController`** (new) -- `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`.
+  These are unauthenticated by nature (login has no token yet; refresh only ever has the
+  cookie; logout must work even against an already-expired Access token), so
+  `SecurityConfig` permits them explicitly, the same way it already did for
+  `/actuator/health`.
+- **`CognitoAuthClient`** (new) -- a server-side version of the same plain Cognito JSON
+  API call the frontend used to make directly (`InitiateAuth` for both
+  `USER_PASSWORD_AUTH` and, new, `REFRESH_TOKEN_AUTH`; `GlobalSignOut` on logout). Uses
+  `WebClient`, not a new dependency, since Spring Cloud Gateway already runs on the
+  reactive WebFlux stack.
+- On login, the Gateway sets the Refresh token as an **HttpOnly, Secure, SameSite=None**
+  cookie (`refresh_token`, scoped to `Path=/auth`) and returns only the Access token in
+  the JSON body -- the Access token is still handled exactly as before (kept in React
+  state, attached as a Bearer header). `SameSite=None` (not the default `Lax`) is
+  required because the frontend (CloudFront) and the Gateway (DuckDNS) are genuinely
+  different sites from the browser's point of view.
+- `POST /auth/refresh` reads that cookie (never exposed to JavaScript -- the browser
+  attaches it automatically) and exchanges it for a new Access token via
+  `REFRESH_TOKEN_AUTH`. The frontend calls this in two places: once on every app
+  load/reload (`AuthContext`'s bootstrap effect -- this is what actually fixes "reload
+  logs you out"), and reactively from `useApiFetch` whenever the Gateway returns 401,
+  before falling back to a real logout.
+- `POST /auth/logout` clears the cookie and, best-effort, calls Cognito's `GlobalSignOut`
+  so a leaked/stolen cookie can't be replayed after an explicit logout.
+
+## Side effect: CORS could no longer be `allowedOrigins("*")`
+
+A credentialed (cookie-carrying) cross-site request is exactly what CORS's
+`allowCredentials(true)` + a wildcard origin combination is designed to forbid (Spring
+Security refuses to even start with that combination). `SecurityConfig`'s
+`corsConfigurationSource()` now lists the frontend's exact origins
+(`ALLOWED_ORIGINS` env var: the CloudFront domain in production, plus
+`http://localhost:5173` for local dev) instead.
+
+## What didn't change
+
+The Access token is still a plain Bearer header on every proxied API call
+(`/orders`, `/stock`, etc.) -- this BFF only ever touches the Refresh token. `signUp`/
+`confirmSignUp` still call Cognito directly from the browser (`cognito.js`) -- neither
+involves a token, so there was never a reason to route them through the Gateway.

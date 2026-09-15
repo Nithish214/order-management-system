@@ -14,7 +14,17 @@ import OrderHistoryPage from "./pages/OrderHistoryPage";
 // `replace` means this redirect doesn't add a new browser-history entry, so the back
 // button doesn't take you to a page you were bounced away from.
 function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isBootstrapping } = useAuth();
+
+  // On first load (or any reload), AuthProvider starts with accessToken = null and
+  // spends a moment asking the Gateway whether the httpOnly refresh cookie holds a
+  // still-valid session (see AuthContext's bootstrapping effect). Rendering nothing
+  // until that finishes avoids bouncing an already-logged-in user to /login for the
+  // one render where isAuthenticated is still (incorrectly) false.
+  if (isBootstrapping) {
+    return null;
+  }
+
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 }
 

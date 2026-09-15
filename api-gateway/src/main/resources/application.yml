@@ -62,6 +62,20 @@ spring:
           # verify every incoming token's signature -- no key ever hardcoded here.
           issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_184lqspmP}
 
+# Backs CognitoAuthClient (the BFF's server-side calls to Cognito for login/refresh) --
+# a separate pair of settings from the issuer-uri above, which is only ever used to
+# *verify* a token's signature, never to obtain one.
+cognito:
+  region: ${COGNITO_REGION:eu-west-1}
+  client-id: ${COGNITO_CLIENT_ID:48v29rgvebkkaj46cjuo4vqjb5}
+
+# The exact origins the frontend is actually served from -- see SecurityConfig's
+# corsConfigurationSource() for why this can no longer be "*" now that /auth/login and
+# /auth/refresh use a cookie. Comma-separated, same convention as other multi-value env
+# vars in this project.
+cors:
+  allowed-origins: ${ALLOWED_ORIGINS:https://dgzc0rv8gh9y.cloudfront.net,http://localhost:5173}
+
 logging:
   level:
     org.springframework.cloud.gateway: INFO

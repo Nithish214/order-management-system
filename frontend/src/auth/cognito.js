@@ -8,6 +8,12 @@
 // change anything for us here, just add a dependency for a plain JSON API call we can
 // already make ourselves. If you enable SRP on the app client later, revisit this and
 // use the SDK -- rolling your own SRP implementation is not worth doing by hand.
+//
+// login() used to live here too, calling InitiateAuth straight from the browser. It
+// moved to auth/bff.js (bffLogin), which calls the Gateway instead -- login is now the
+// one place a refresh token gets issued, and only a server can hold that safely in an
+// HttpOnly cookie. signUp/confirmSignUp stay here: neither one ever touches a token, so
+// calling Cognito directly from the browser was never the problem for them.
 
 const COGNITO_URL = `https://cognito-idp.${import.meta.env.VITE_COGNITO_REGION}.amazonaws.com/`;
 const CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID;
@@ -28,16 +34,6 @@ async function callCognito(target, body) {
     throw new Error(data.message || `${target} failed`);
   }
   return data;
-}
-
-export async function login(email, password) {
-  const data = await callCognito("InitiateAuth", {
-    AuthFlow: "USER_PASSWORD_AUTH",
-    ClientId: CLIENT_ID,
-    AuthParameters: { USERNAME: email, PASSWORD: password },
-  });
-  // { AccessToken, IdToken, RefreshToken, ExpiresIn, TokenType }
-  return data.AuthenticationResult;
 }
 
 // SignUp is a *public* Cognito API -- no admin credentials or existing token needed,

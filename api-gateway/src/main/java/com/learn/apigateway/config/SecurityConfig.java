@@ -1,5 +1,6 @@
 package com.learn.apigateway.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -32,6 +33,11 @@ import java.util.stream.Collectors;
 @EnableWebFluxSecurity
 public class SecurityConfig {
 
+    // Comma-separated via env var (ALLOWED_ORIGINS) the same way ORDER_SERVICE_URL etc.
+    // are -- see corsConfigurationSource() for why this can no longer just be "*".
+    @Value("${cors.allowed-origins}")
+    private String[] allowedOrigins;
+
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
@@ -61,6 +67,10 @@ public class SecurityConfig {
                         // the healthcheck would get a 401 and the Gateway would look permanently
                         // unhealthy regardless of whether it's actually fine.
                         .pathMatchers("/actuator/health").permitAll()
+                        // Login has no token yet by definition; refresh only ever has the httpOnly
+                        // cookie (no Bearer token); logout must still work against an
+                        // already-expired access token. See AuthController.
+                        .pathMatchers(HttpMethod.POST, "/auth/login", "/auth/refresh", "/auth/logout").permitAll()
                         // Most specific rule next: restock additionally requires the "admin" group.
                         // hasAuthority checks for the exact "ROLE_admin" authority our converter below
                         // produces from the token's cognito:groups claim.
@@ -72,16 +82,20 @@ public class SecurityConfig {
                 .build();
     }
 
-    // Same policy as the old spring.cloud.gateway.globalcors config in application.yml (now
-    // removed, to avoid two separate CORS mechanisms potentially both adding headers to the
-    // same response) -- allow any origin/method/header. allowedOrigins("*") is fine precisely
-    // because credentials (cookies) are never used here, only a Bearer token in a header;
-    // Spring refuses "*" combined with allowCredentials(true), which doesn't apply to us.
+    // Used to allow any origin ("*") since only a Bearer token in a header was ever sent,
+    // never cookies. That changed with the BFF (AuthController): /auth/login and
+    // /auth/refresh now set/read an HttpOnly cookie, which means the browser must send
+    // credentials with those requests -- and CORS flatly forbids combining
+    // allowCredentials(true) with a wildcard origin (Spring itself refuses to start with
+    // that combination). allowedOrigins now lists the exact origins the frontend is
+    // actually served from instead: the CloudFront distribution in production, plus the
+    // Vite dev server for local dev against a Gateway run outside Docker.
     private CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("*"));
+        configuration.setAllowedOrigins(List.of(allowedOrigins));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
