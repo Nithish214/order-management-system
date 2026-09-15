@@ -1,8 +1,38 @@
+/* Global reset + base element styles -- the tokens themselves live in styles/tokens.css.
+   This file is the first (and most global) place they actually get used: every page gets
+   the right background, text color, and typeface before any component-level redesign work
+   happens in the steps that follow. */
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, Arial, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--text-base-size);
+  line-height: var(--text-base-line);
+  font-weight: var(--font-weight-regular);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+a {
+  color: var(--color-accent);
 }
 
 button {
   cursor: pointer;
+  font-family: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }

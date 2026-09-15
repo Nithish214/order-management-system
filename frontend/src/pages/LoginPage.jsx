@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { friendlyErrorMessage } from "../utils/errors";
+import "./AuthForm.css";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -23,48 +25,42 @@ export default function LoginPage() {
       // that trick goes away once "which page" is driven by the URL instead.)
       navigate("/");
     } catch (err) {
-      setError(err.message);
+      setError(friendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 320, margin: "80px auto", fontFamily: "sans-serif" }}>
+    <div className="auth-page">
       <h1>Log in</h1>
       <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: 12 }}>
-          <label>
-            Email
-            <br />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{ width: "100%" }}
-            />
-          </label>
+        <div className="auth-field">
+          <label htmlFor="login-email">Email</label>
+          <input
+            id="login-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label>
-            Password
-            <br />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={{ width: "100%" }}
-            />
-          </label>
+        <div className="auth-field">
+          <label htmlFor="login-password">Password</label>
+          <input
+            id="login-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
         </div>
-        {error && <p style={{ color: "red" }}>{error}</p>}
-        <button type="submit" disabled={loading}>
+        {error && <p className="text-error auth-error">{error}</p>}
+        <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? "Logging in..." : "Log in"}
         </button>
       </form>
-      <p>
+      <p className="auth-footer">
         <Link to="/signup">Don't have an account? Sign up</Link>
       </p>
     </div>

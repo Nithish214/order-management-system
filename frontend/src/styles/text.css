@@ -1,0 +1,27 @@
+/* Generic, reusable text treatments -- shared across every page rather than each page's
+   own stylesheet redeclaring the same color+size+line-height for "an error message" or
+   "secondary/muted text." Page-specific stylesheets add spacing (margins) on top of these,
+   not color or size again. */
+
+.text-error {
+  color: var(--color-error);
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+}
+
+.text-muted {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+}
+
+/* "Back to X" link, used by both the order status page and order history page --
+   moved here rather than duplicated once a second page needed it. */
+.back-link {
+  font-size: var(--text-sm-size);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}

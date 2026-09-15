@@ -1,0 +1,53 @@
+/* Same plain list-with-dividers pattern as the product list (Step 3) and order items
+   (Step 4) -- consistent visual language for "a list of things," not a fourth different
+   treatment invented for this one page. */
+
+.history-page {
+  max-width: 640px;
+  margin: var(--space-5) auto 0;
+  padding: 0 var(--space-3) var(--space-6);
+}
+
+.history-page h1 {
+  font-size: var(--text-xl-size);
+  line-height: var(--text-xl-line);
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.history-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.history-row:first-child {
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.history-row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.history-order-link {
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.history-order-link:hover {
+  text-decoration: underline;
+}
+
+.history-row-meta {
+  display: flex;
+  gap: var(--space-3);
+}

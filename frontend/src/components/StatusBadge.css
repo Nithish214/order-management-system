@@ -1,0 +1,35 @@
+/* Colors reused verbatim from OrderStatusPage.css's outcome/pipeline treatment --
+   pending/success/error use the same three subtle-tint + solid-text pairing, and
+   neutral (cancelled) deliberately stays out of that trio for the same reason it does
+   there: it's a customer action, not a system judgment, so it doesn't get one of the
+   three meaningful colors. */
+
+.status-badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  font-size: var(--text-xs-size);
+  line-height: var(--text-xs-line);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.status-badge--pending {
+  background: var(--color-pending-subtle);
+  color: var(--color-pending);
+}
+
+.status-badge--success {
+  background: var(--color-success-subtle);
+  color: var(--color-success);
+}
+
+.status-badge--error {
+  background: var(--color-error-subtle);
+  color: var(--color-error);
+}
+
+.status-badge--neutral {
+  background: var(--color-border);
+  color: var(--color-text-muted);
+}

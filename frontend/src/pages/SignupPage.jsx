@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signUp, confirmSignUp } from "../auth/cognito";
 import { useAuth } from "../auth/AuthContext";
+import { friendlyErrorMessage } from "../utils/errors";
+import "./AuthForm.css";
 
 // Two-step flow, tracked with a plain "step" string in local state rather than separate
 // routes -- there's nothing else that would ever need to link directly to "step 2",
@@ -26,7 +28,7 @@ export default function SignupPage() {
       await signUp(email, password);
       setStep("confirm");
     } catch (err) {
-      setError(err.message);
+      setError(friendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -45,73 +47,64 @@ export default function SignupPage() {
       await login(email, password);
       navigate("/");
     } catch (err) {
-      setError(err.message);
+      setError(friendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 320, margin: "80px auto", fontFamily: "sans-serif" }}>
+    <div className="auth-page">
       {step === "register" ? (
         <>
           <h1>Create account</h1>
           <form onSubmit={handleRegister}>
-            <div style={{ marginBottom: 12 }}>
-              <label>
-                Email
-                <br />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  style={{ width: "100%" }}
-                />
-              </label>
+            <div className="auth-field">
+              <label htmlFor="signup-email">Email</label>
+              <input
+                id="signup-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <label>
-                Password
-                <br />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  style={{ width: "100%" }}
-                />
-              </label>
+            <div className="auth-field">
+              <label htmlFor="signup-password">Password</label>
+              <input
+                id="signup-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
             </div>
-            {error && <p style={{ color: "red" }}>{error}</p>}
-            <button type="submit" disabled={loading}>
+            {error && <p className="text-error auth-error">{error}</p>}
+            <button type="submit" className="btn-primary" disabled={loading}>
               {loading ? "Creating account..." : "Create account"}
             </button>
           </form>
-          <p>
+          <p className="auth-footer">
             <Link to="/login">Already have an account? Log in</Link>
           </p>
         </>
       ) : (
         <>
           <h1>Check your email</h1>
-          <p>We sent a confirmation code to {email}.</p>
+          <p className="text-muted auth-hint">We sent a confirmation code to {email}.</p>
           <form onSubmit={handleConfirm}>
-            <div style={{ marginBottom: 12 }}>
-              <label>
-                Confirmation code
-                <br />
-                <input
-                  type="text"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                  style={{ width: "100%" }}
-                />
-              </label>
+            <div className="auth-field">
+              <label htmlFor="signup-code">Confirmation code</label>
+              <input
+                id="signup-code"
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+              />
             </div>
-            {error && <p style={{ color: "red" }}>{error}</p>}
-            <button type="submit" disabled={loading}>
+            {error && <p className="text-error auth-error">{error}</p>}
+            <button type="submit" className="btn-primary" disabled={loading}>
               {loading ? "Confirming..." : "Confirm"}
             </button>
           </form>

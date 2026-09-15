@@ -1,0 +1,72 @@
+/* Shared by LoginPage and SignupPage -- structurally the same pattern (a centered, quiet
+   form), so one stylesheet instead of duplicating it twice. Deliberately restrained: this
+   is one of the pages the design direction says should stay quiet, not compete with the
+   order status page for attention -- no card border, no shadow, just spacing. */
+
+.auth-page {
+  max-width: 360px;
+  margin: var(--space-6) auto 0;
+  padding: 0 var(--space-3);
+}
+
+.auth-page h1 {
+  font-size: var(--text-xl-size);
+  line-height: var(--text-xl-line);
+  margin-bottom: var(--space-4);
+}
+
+/* Color/size come from the shared .text-muted/.text-error utilities (styles/text.css) --
+   these two classes add only the spacing specific to this layout. */
+.auth-hint {
+  margin: 0 0 var(--space-4);
+}
+
+.auth-field {
+  margin-bottom: var(--space-3);
+}
+
+.auth-field label {
+  display: block;
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-1);
+}
+
+.auth-field input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-base-size);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.auth-error {
+  margin: 0 0 var(--space-3);
+}
+
+.auth-page .btn-primary {
+  width: 100%;
+}
+
+.auth-footer {
+  margin-top: var(--space-4);
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+}
+
+.auth-footer a {
+  text-decoration: none;
+}
+
+.auth-footer a:hover {
+  text-decoration: underline;
+}

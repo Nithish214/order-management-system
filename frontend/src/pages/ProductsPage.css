@@ -1,0 +1,221 @@
+/* Products: a plain list with row dividers, not a repeating bordered/shadowed card per
+   product -- that would be exactly the "rounded-card-kit sameness" the design direction
+   warns against for something this simple. The cart gets the one deliberate exception: a
+   single bordered panel, because it functionally IS a distinct block on this page (running
+   total, checkout action) -- restraint means giving the treatment to the one thing that's
+   actually different, not to everything, and not to nothing either. */
+
+.products-page {
+  max-width: 960px;
+  margin: var(--space-5) auto 0;
+  padding: 0 var(--space-3) var(--space-6);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.page-header h1 {
+  font-size: var(--text-xl-size);
+  line-height: var(--text-xl-line);
+}
+
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm-size);
+}
+
+.page-nav a {
+  text-decoration: none;
+}
+
+.page-nav a:hover {
+  text-decoration: underline;
+}
+
+.page-error {
+  margin: 0 0 var(--space-3);
+}
+
+.products-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+/* ---- Product list ---- */
+
+.product-list {
+  flex: 2 1 480px;
+  min-width: 280px;
+}
+
+.product-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.product-row:first-child {
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.product-info {
+  min-width: 0;
+}
+
+.product-name {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.product-sku {
+  margin: var(--space-1) 0 0;
+}
+
+.product-price {
+  margin: 0 var(--space-4) 0 auto;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+/* ---- Cart summary -- the one bordered panel on this page ---- */
+
+.cart-summary {
+  flex: 1 1 280px;
+  min-width: 260px;
+  border: var(--border-width) solid var(--color-border);
+  padding: var(--space-4);
+}
+
+.cart-summary h2 {
+  font-size: var(--text-lg-size);
+  line-height: var(--text-lg-line);
+  margin-bottom: var(--space-3);
+}
+
+.cart-items {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+}
+
+.cart-item {
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.cart-item:first-child {
+  padding-top: 0;
+}
+
+.cart-item:last-child {
+  border-bottom: none;
+}
+
+.cart-item-info {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.cart-item-name {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.cart-item-line-total {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.cart-item-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.quantity-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.quantity-stepper button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-control);
+  font-family: inherit;
+  font-size: var(--text-base-size);
+  line-height: 1;
+  color: var(--color-text);
+}
+
+.quantity-stepper button:hover {
+  border-color: var(--color-text-muted);
+}
+
+.quantity-stepper input {
+  width: 40px;
+  padding: var(--space-1);
+  text-align: center;
+  font-family: inherit;
+  font-size: var(--text-sm-size);
+  color: var(--color-text);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.quantity-stepper input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.cart-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm-size);
+  text-decoration: underline;
+}
+
+.cart-remove:hover {
+  color: var(--color-error);
+}
+
+.cart-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-top: var(--space-3);
+  margin-bottom: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border);
+  font-weight: var(--font-weight-semibold);
+}
+
+.cart-summary .btn-primary {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .products-layout {
+    flex-direction: column;
+  }
+}

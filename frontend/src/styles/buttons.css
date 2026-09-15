@@ -1,0 +1,45 @@
+/* Two button levels, used everywhere in this app from here on -- one primary (solid
+   accent) treatment for the one important action on a page, one secondary (quiet, outlined)
+   treatment for everything else. A third level would just invite inconsistent use across
+   five separately-redesigned pages. */
+
+.btn-primary {
+  font-family: inherit;
+  font-size: var(--text-base-size);
+  font-weight: var(--font-weight-semibold);
+  color: #ffffff;
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-4);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.btn-primary:disabled {
+  background: var(--color-disabled);
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  font-family: inherit;
+  font-size: var(--text-sm-size);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text);
+  background: transparent;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-3);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--color-text-muted);
+}
+
+.btn-secondary:disabled {
+  color: var(--color-disabled);
+  border-color: var(--color-border);
+  cursor: not-allowed;
+}

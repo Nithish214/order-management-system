@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { useCart } from "../cart/CartContext";
 import { useAuth } from "../auth/AuthContext";
+import { friendlyErrorMessage } from "../utils/errors";
+import "./ProductsPage.css";
 
 export default function ProductsPage() {
   const apiFetch = useApiFetch();
@@ -33,7 +35,7 @@ export default function ProductsPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err.message);
+          setError(friendlyErrorMessage(err));
         }
       } finally {
         if (!cancelled) {
@@ -77,98 +79,115 @@ export default function ProductsPage() {
 
       const order = await response.json();
       cart.clear();
-      // Phase C builds this page -- for now the route doesn't exist yet, so this will
-      // 404 until then. Wiring it up now means Phase C only has to add the page itself.
       navigate(`/orders/${order.id}`);
     } catch (err) {
-      setError(err.message);
+      setError(friendlyErrorMessage(err));
     } finally {
       setPlacingOrder(false);
     }
   }
 
-  if (loading) return <p>Loading products...</p>;
+  if (loading) {
+    return (
+      <div className="products-page">
+        <p className="text-muted">Loading products...</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div className="products-page">
+      <header className="page-header">
         <h1>Products</h1>
-        <div>
+        <nav className="page-nav">
           <Link to="/orders">Order history</Link>
-          <button onClick={logout} style={{ marginLeft: 12 }}>
+          <button onClick={logout} className="btn-secondary">
             Log out
           </button>
-        </div>
-      </div>
+        </nav>
+      </header>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="text-error page-error">{error}</p>}
 
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ textAlign: "left" }}>
-            <th>Name</th>
-            <th>SKU</th>
-            <th>Price</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
+      <div className="products-layout">
+        <section className="product-list">
           {products.map((product) => (
-            <tr key={product.id}>
-              <td>{product.name}</td>
-              <td>{product.sku}</td>
-              <td>${product.unitPrice.toFixed(2)}</td>
-              <td>
-                <button onClick={() => cart.addItem(product)}>Add to cart</button>
-              </td>
-            </tr>
+            <div className="product-row" key={product.id}>
+              <div className="product-info">
+                <p className="product-name">{product.name}</p>
+                <p className="product-sku text-muted">{product.sku}</p>
+              </div>
+              <p className="product-price">${product.unitPrice.toFixed(2)}</p>
+              <button className="btn-secondary" onClick={() => cart.addItem(product)}>
+                Add to cart
+              </button>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </section>
 
-      <h2>Cart</h2>
-      {cart.items.length === 0 ? (
-        <p>Cart is empty.</p>
-      ) : (
-        <>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ textAlign: "left" }}>
-                <th>Name</th>
-                <th>Quantity</th>
-                <th>Line total</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {cart.items.map((item) => (
-                <tr key={item.productId}>
-                  <td>{item.name}</td>
-                  <td>
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => cart.setQuantity(item.productId, Number(e.target.value))}
-                      style={{ width: 50 }}
-                    />
-                  </td>
-                  <td>${(item.unitPrice * item.quantity).toFixed(2)}</td>
-                  <td>
-                    <button onClick={() => cart.removeItem(item.productId)}>Remove</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p>
-            <strong>Total: ${cart.total.toFixed(2)}</strong>
-          </p>
-          <button onClick={handlePlaceOrder} disabled={placingOrder}>
-            {placingOrder ? "Placing order..." : "Place order"}
-          </button>
-        </>
-      )}
+        <aside className="cart-summary">
+          <h2>Cart</h2>
+          {cart.items.length === 0 ? (
+            <p className="text-muted">Cart is empty.</p>
+          ) : (
+            <>
+              <ul className="cart-items">
+                {cart.items.map((item) => (
+                  <li className="cart-item" key={item.productId}>
+                    <div className="cart-item-info">
+                      <p className="cart-item-name">{item.name}</p>
+                      <p className="cart-item-line-total">
+                        ${(item.unitPrice * item.quantity).toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="cart-item-controls">
+                      <div className="quantity-stepper">
+                        <button
+                          type="button"
+                          onClick={() => cart.setQuantity(item.productId, item.quantity - 1)}
+                          aria-label={`Decrease quantity of ${item.name}`}
+                        >
+                          &minus;
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            cart.setQuantity(item.productId, Number(e.target.value))
+                          }
+                          aria-label={`Quantity of ${item.name}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => cart.setQuantity(item.productId, item.quantity + 1)}
+                          aria-label={`Increase quantity of ${item.name}`}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        className="cart-remove"
+                        onClick={() => cart.removeItem(item.productId)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="cart-total">
+                <span>Total</span>
+                <strong>${cart.total.toFixed(2)}</strong>
+              </div>
+              <button className="btn-primary" onClick={handlePlaceOrder} disabled={placingOrder}>
+                {placingOrder ? "Placing order..." : "Place order"}
+              </button>
+            </>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }

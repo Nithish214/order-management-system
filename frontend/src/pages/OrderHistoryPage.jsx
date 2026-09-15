@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
+import { friendlyErrorMessage } from "../utils/errors";
+import StatusBadge from "../components/StatusBadge";
+import "./OrderHistoryPage.css";
 
 export default function OrderHistoryPage() {
   const apiFetch = useApiFetch();
@@ -21,7 +24,7 @@ export default function OrderHistoryPage() {
         const data = await response.json();
         if (!cancelled) setOrders(data);
       } catch (err) {
-        if (!cancelled) setError(err.message);
+        if (!cancelled) setError(friendlyErrorMessage(err));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -33,41 +36,49 @@ export default function OrderHistoryPage() {
     };
   }, [apiFetch]);
 
-  if (loading) return <p>Loading order history...</p>;
-  if (error) return <p style={{ color: "red" }}>{error}</p>;
+  if (loading) {
+    return (
+      <div className="history-page">
+        <p className="text-muted">Loading order history...</p>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="history-page">
+        <p className="text-error">{error}</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif" }}>
+    <div className="history-page">
       <p>
-        <Link to="/">&larr; Back to products</Link>
+        <Link to="/" className="back-link">
+          &larr; Back to products
+        </Link>
       </p>
-      <h1>Order History</h1>
+      <h1>Order history</h1>
 
       {orders.length === 0 ? (
-        <p>No orders yet.</p>
+        <p className="text-muted">No orders yet.</p>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ textAlign: "left" }}>
-              <th>Order</th>
-              <th>Status</th>
-              <th>Total</th>
-              <th>Placed</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((order) => (
-              <tr key={order.id}>
-                <td>
-                  <Link to={`/orders/${order.id}`}>#{order.id}</Link>
-                </td>
-                <td>{order.status}</td>
-                <td>${order.totalAmount.toFixed(2)}</td>
-                <td>{new Date(order.createdAt).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul className="history-list">
+          {orders.map((order) => (
+            <li className="history-row" key={order.id}>
+              <div className="history-row-main">
+                <Link to={`/orders/${order.id}`} className="history-order-link">
+                  Order #{order.id}
+                </Link>
+                <StatusBadge status={order.status} />
+              </div>
+              <div className="history-row-meta text-muted">
+                <span>${order.totalAmount.toFixed(2)}</span>
+                <span>{new Date(order.createdAt).toLocaleString()}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

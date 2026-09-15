@@ -1,0 +1,328 @@
+/* The centerpiece page -- this app's real, interesting behavior is that an order takes a
+   few seconds to move through an actual event-driven pipeline, and this is where that
+   becomes visible instead of hidden behind a spinner. */
+
+.status-page {
+  max-width: 560px;
+  margin: var(--space-5) auto 0;
+  padding: 0 var(--space-3) var(--space-6);
+}
+
+.status-page h1 {
+  font-size: var(--text-xl-size);
+  line-height: var(--text-xl-line);
+  margin: var(--space-3) 0 var(--space-5);
+}
+
+.cancel-button {
+  margin-bottom: var(--space-5);
+}
+
+/* ---- The pipeline ---- */
+
+.pipeline {
+  display: flex;
+  list-style: none;
+  margin: 0 0 var(--space-5);
+  padding: 0;
+}
+
+.pipeline-stage {
+  flex: 1;
+  /* Flex items default to min-width: auto, which refuses to shrink a stage below its own
+     label's single-line width -- with 4 stages and labels like "Inventory checked" and
+     "Payment processed", that pushed neighboring labels into each other instead of
+     wrapping. min-width: 0 lets flex actually honor the equal 1/4 split and wrap text. */
+  min-width: 0;
+  padding: 0 var(--space-1);
+  text-align: center;
+}
+
+.pipeline-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-2);
+}
+
+/* The connecting line runs through the middle of every node, full width, behind the node
+   itself -- each stage's own connector reflects that stage's state, since it represents
+   the path leading into it. */
+.pipeline-track::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-border);
+  transform: translateY(-50%);
+  transition: background-color 0.3s ease;
+}
+
+.pipeline-stage:first-child .pipeline-track::before {
+  left: 50%;
+}
+
+.pipeline-stage:last-child .pipeline-track::before {
+  right: 50%;
+}
+
+.pipeline-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm-size);
+  font-weight: var(--font-weight-semibold);
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+/* Plays once, exactly when a node actually transitions into one of these end states --
+   not a looping decoration. Each state is its own CSS class, so the animation naturally
+   (re)plays the moment a poll tick brings back a new status and React swaps the class. */
+@keyframes pipeline-node-settle {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.pipeline-stage--done .pipeline-node,
+.pipeline-stage--success .pipeline-node,
+.pipeline-stage--stopped .pipeline-node {
+  animation: pipeline-node-settle 0.4s ease;
+}
+
+/* The connecting line "fills in" toward a stage the moment it settles, instead of just
+   snapping to its final color -- growing from the shared boundary with the previous
+   stage, the same direction the order is actually moving through the pipeline. */
+@keyframes pipeline-connector-fill {
+  from {
+    transform: translateY(-50%) scaleX(0);
+  }
+  to {
+    transform: translateY(-50%) scaleX(1);
+  }
+}
+
+.pipeline-stage--done .pipeline-track::before,
+.pipeline-stage--success .pipeline-track::before,
+.pipeline-stage--stopped .pipeline-track::before {
+  transform-origin: left;
+  animation: pipeline-connector-fill 0.45s ease;
+}
+
+.pipeline-label {
+  display: block;
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+  color: var(--color-text-muted);
+}
+
+/* Done: a past milestone that genuinely occurred -- deliberately neutral (near-black), not
+   a status color. A status color is reserved for a judgment about the outcome, not for
+   "this checkpoint happened." */
+.pipeline-stage--done .pipeline-track::before {
+  background: var(--color-text);
+}
+
+.pipeline-stage--done .pipeline-node {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: #ffffff;
+}
+
+.pipeline-stage--done .pipeline-label {
+  color: var(--color-text);
+}
+
+/* Active: genuinely underway right now -- see the JSX comment on getStageStates for why
+   stages 2 and 3 always share this state together rather than one being falsely marked
+   done before the other. The pulse is anchored to a specific, named, real pipeline stage,
+   which is the actual difference between this and a generic unlabelled spinner. */
+.pipeline-stage--active .pipeline-track::before {
+  background: var(--color-pending);
+}
+
+.pipeline-stage--active .pipeline-node {
+  background: var(--color-pending-subtle);
+  border-color: var(--color-pending);
+  color: var(--color-pending);
+  animation: pipeline-pulse 1.6s ease-in-out infinite;
+}
+
+.pipeline-stage--active .pipeline-label {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+@keyframes pipeline-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--color-pending-subtle);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--color-pending-subtle);
+    transform: scale(1.06);
+  }
+}
+
+/* Stopped: this is genuinely where the order failed -- the honest stand-in for the
+   coupled pair when REJECTED, since the client can't say which one actually stopped it.
+   The specific real reason is shown separately, in the outcome block below. */
+.pipeline-stage--stopped .pipeline-track::before {
+  background: var(--color-error);
+}
+
+.pipeline-stage--stopped .pipeline-node {
+  background: var(--color-error);
+  border-color: var(--color-error);
+  color: #ffffff;
+}
+
+.pipeline-stage--stopped .pipeline-label {
+  color: var(--color-error);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Success: the one node that IS the actual meaningful outcome, distinct from a plain
+   "done" checkpoint along the way -- this is the only stage that ever earns green. */
+.pipeline-stage--success .pipeline-track::before {
+  background: var(--color-success);
+}
+
+.pipeline-stage--success .pipeline-node {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #ffffff;
+}
+
+.pipeline-stage--success .pipeline-label {
+  color: var(--color-success);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Upcoming: not reached, and -- for "Confirmed" on a rejected/cancelled order -- never
+   will be. Quiet on purpose; there's nothing to say about a stage that didn't happen. But
+   quiet still needs to be visible -- --color-border (#E2E4EA) against the page background
+   (#F7F8FA) is nearly invisible as an outline, so this uses the darker muted-text color
+   instead, just for the node's own border/label, not the connector line leading into it. */
+.pipeline-stage--upcoming .pipeline-node {
+  background: var(--color-bg);
+  border-color: var(--color-text-muted);
+  color: var(--color-text-muted);
+}
+
+/* ---- Outcome summary -- the plain-language explanation, separate from the pipeline
+   itself. A colored left border carries the meaning; the tinted background is the subtle
+   variant so body text inside stays fully readable, not a solid status-color block. ---- */
+
+/* Plays once per actual status change, not per 3s poll tick -- see the key={status} prop
+   in JSX, which forces React to mount a fresh element only when the status genuinely
+   changes, rather than replaying this every time the page happens to re-render. */
+@keyframes outcome-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.outcome {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+  border-left: 4px solid var(--color-border);
+  animation: outcome-enter 0.35s ease;
+}
+
+/* Motion here is all tied to real state transitions, not decoration for its own sake --
+   still worth turning off for anyone who's asked their OS to reduce motion. */
+@media (prefers-reduced-motion: reduce) {
+  .pipeline-node,
+  .pipeline-track::before,
+  .outcome {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.outcome-title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.outcome-detail {
+  margin: var(--space-1) 0 0;
+}
+
+.outcome--pending {
+  background: var(--color-pending-subtle);
+  border-left-color: var(--color-pending);
+}
+
+.outcome--success {
+  background: var(--color-success-subtle);
+  border-left-color: var(--color-success);
+}
+
+.outcome--error {
+  background: var(--color-error-subtle);
+  border-left-color: var(--color-error);
+}
+
+/* Cancelled isn't one of the three meaningful status colors (pending/confirmed/rejected)
+   -- it's a fourth, customer-driven concept, not a system judgment. Forcing it into red or
+   amber would blur what those two colors actually mean elsewhere on this page, so it gets
+   the existing neutral border tone instead of a new color. */
+.outcome--neutral {
+  background: var(--color-border);
+}
+
+/* ---- Order items -- same plain list-with-dividers treatment as the product list (Step 3),
+   not a re-styled default <table>. ---- */
+
+.order-items {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+}
+
+.order-item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.order-item:first-child {
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.order-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-top: var(--space-2);
+  margin-bottom: var(--space-5);
+  font-weight: var(--font-weight-semibold);
+}

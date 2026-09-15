@@ -1,0 +1,84 @@
+/* Design tokens -- the single source of truth for color, type, and spacing. Every page
+   redesigned in the steps that follow reads from these variables instead of writing its
+   own font-size/color/margin values -- that's what keeps five separately-built pages
+   feeling like one product instead of five different guesses at the same thing. */
+
+:root {
+  /* ---- Color: the six roles specified in the design direction ---- */
+  --color-text: #1a1d29; /* near-black, not pure #000 -- less harsh at body-text sizes */
+  --color-bg: #f7f8fa; /* the page background everything else sits on top of */
+  --color-accent: #3b5bff; /* the one blue -- primary actions and links, nothing else */
+  --color-success: #16a34a; /* CONFIRMED */
+  --color-error: #dc2626; /* REJECTED / validation errors */
+  --color-pending: #f59e0b; /* PENDING / in-progress */
+
+  /* ---- Supporting neutrals ----
+     Not part of the six specified roles above -- a real interface still needs a couple of
+     utility shades (something for borders, something for secondary text, a surface color
+     to lift a panel off the page background) that were never going to be one of the six
+     meaning-carrying colors. Derived from --color-text/--color-bg, not invented separately,
+     so they still read as "the same palette, quieter." */
+  --color-surface: #ffffff; /* panels/inputs sitting on --color-bg -- the only "lift" this
+                                design uses instead of a drop shadow */
+  --color-border: #e2e4ea; /* hairline dividers and outlines -- see --border-width */
+  --color-text-muted: #6b7080; /* secondary text: timestamps, helper copy, table meta */
+  --color-disabled: #b9bcc7; /* disabled control text/border */
+
+  /* Hover/pressed feedback for the one accent color -- a UI needs this the moment a button
+     exists; a single static blue with no interaction state isn't a real option. */
+  --color-accent-hover: #2d47cc;
+
+  /* Subtle tints of the three status colors, for a badge/pill background where the full
+     solid color would be too loud sitting next to body text (see the order status page,
+     Step 4) -- mixed toward white, not just a lower opacity of the solid color, so text
+     inside stays crisp. */
+  --color-success-subtle: #e8f6ed;
+  --color-error-subtle: #fbe9e9;
+  --color-pending-subtle: #fef3e2;
+
+  /* ---- Typography ----
+     One family, two weights, both specified explicitly -- resist the temptation to reach
+     for a third weight "just this once" in a later step. */
+  --font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+
+  /* Five (size, line-height) pairs -- a line-height is chosen deliberately for each size,
+     not left at the browser default, and every later step picks one of these five rather
+     than writing a new font-size anywhere. */
+  --text-xs-size: 0.75rem; /* 12px -- timestamps, fine print */
+  --text-xs-line: 1rem; /* 16px */
+
+  --text-sm-size: 0.875rem; /* 14px -- secondary body copy, table cells */
+  --text-sm-line: 1.25rem; /* 20px */
+
+  --text-base-size: 1rem; /* 16px -- primary body text */
+  --text-base-line: 1.5rem; /* 24px */
+
+  --text-lg-size: 1.25rem; /* 20px -- section headings */
+  --text-lg-line: 1.75rem; /* 28px */
+
+  --text-xl-size: 1.75rem; /* 28px -- page titles, used sparingly */
+  --text-xl-line: 2.25rem; /* 36px */
+
+  /* ---- Spacing ----
+     One scale, used for every margin/padding/gap from here on -- an arbitrary "13px" or
+     "22px" appearing in a later step is a sign something should have used one of these
+     instead. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+
+  /* ---- Structure: borders over shadows ----
+     Deliberately only one radius token, for small interactive controls (buttons, inputs,
+     badges) -- there is no "--radius-card" here on purpose. Larger structural containers
+     use --border-width with --color-border (or no border/radius at all) instead of
+     rounding + a shadow, which is exactly the "rounded-card-kit sameness" the design
+     direction calls out to avoid. Hierarchy comes from spacing and borders, not from every
+     box getting identical treatment. */
+  --radius-control: 6px;
+  --border-width: 1px;
+}
