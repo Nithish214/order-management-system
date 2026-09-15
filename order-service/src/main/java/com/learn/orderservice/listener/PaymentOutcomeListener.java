@@ -16,6 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PaymentOutcomeListener {
 
+    // Same principle as InventoryOutcomeListener's CUSTOMER_MESSAGE, extended here too:
+    // Payment Service's real reason today is "Simulated payment decline" (see
+    // InventoryReservedListener's DECLINE_REASON) -- accurate, but it discloses an internal
+    // implementation detail (that payment is simulated at all) that no customer should
+    // ever see, real gateway or not.
+    private static final String CUSTOMER_MESSAGE = "We couldn't process your payment. Please try again.";
+
     private final ObjectMapper objectMapper;
     private final OrderStatusUpdater orderStatusUpdater;
 
@@ -28,13 +35,13 @@ public class PaymentOutcomeListener {
     @Transactional
     public void onPaymentCompleted(String message) throws Exception {
         PaymentOutcomeEvent event = objectMapper.readValue(message, PaymentOutcomeEvent.class);
-        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.CONFIRMED, null);
+        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.CONFIRMED, null, null);
     }
 
     @KafkaListener(topics = "payment.failed", groupId = "order-service")
     @Transactional
     public void onPaymentFailed(String message) throws Exception {
         PaymentOutcomeEvent event = objectMapper.readValue(message, PaymentOutcomeEvent.class);
-        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.REJECTED, event.getReason());
+        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.REJECTED, CUSTOMER_MESSAGE, event.getReason());
     }
 }

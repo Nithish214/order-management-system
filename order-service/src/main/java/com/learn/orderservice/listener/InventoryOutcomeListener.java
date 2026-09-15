@@ -19,6 +19,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InventoryOutcomeListener {
 
+    // Deliberately generic -- Inventory Service's real reason (event.getReason(), e.g.
+    // "product 7 requested 3 but only 1 available") is genuinely useful for debugging and
+    // still gets logged in full (see the call below), but it is never what gets persisted
+    // or returned by the API. Exposing exact available_quantity figures to any
+    // authenticated caller who orders enough of something to trigger this message would
+    // let them enumerate this business's live stock levels for free -- a real
+    // information leak, not just a rough-edges wording choice.
+    private static final String CUSTOMER_MESSAGE = "One or more items in your order are currently out of stock.";
+
     private final ObjectMapper objectMapper;
     private final OrderStatusUpdater orderStatusUpdater;
 
@@ -31,6 +40,6 @@ public class InventoryOutcomeListener {
     @Transactional
     public void onInventoryFailed(String message) throws Exception {
         InventoryOutcomeEvent event = objectMapper.readValue(message, InventoryOutcomeEvent.class);
-        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.REJECTED, event.getReason());
+        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.REJECTED, CUSTOMER_MESSAGE, event.getReason());
     }
 }

@@ -27,7 +27,19 @@ public class OrderStatusUpdater {
         this.orderRepository = orderRepository;
     }
 
-    public void applyStatus(Long orderId, OrderStatus status, String reason) {
+    // customerReason is what actually gets persisted and returned by the API -- plain
+    // language, safe for any authenticated caller to read back. internalDetail is the
+    // real, technical reason (exact stock figures, which payment gateway said what),
+    // logged here for debugging/ops visibility but never persisted or exposed -- pass
+    // null when status isn't REJECTED, or when customerReason already is the full story.
+    //
+    // These two are deliberately not the same value: Inventory Service's real rejection
+    // reason looks like "product 7 requested 3 but only 1 available", which is exactly
+    // the kind of thing that should never reach a customer verbatim -- not because it's
+    // poorly worded, but because it discloses this business's exact live stock levels to
+    // anyone willing to place a large-enough order and read the error. See the two
+    // callers' CUSTOMER_MESSAGE constants for what actually gets shown instead.
+    public void applyStatus(Long orderId, OrderStatus status, String customerReason, String internalDetail) {
         Order order = orderRepository.findById(orderId).orElse(null);
         if (order == null) {
             log.warn("Received outcome for unknown order {}", orderId);
@@ -42,12 +54,8 @@ public class OrderStatusUpdater {
         }
         order.setStatus(status);
         if (status == OrderStatus.REJECTED) {
-            // Persisted now, not just logged -- see Order.rejectionReason's comment for why
-            // this stopped being safe to discard once a second, unrelated cause of
-            // REJECTED (a declined payment) existed alongside the original one
-            // (insufficient stock).
-            order.setRejectionReason(reason);
-            log.info("Order {} rejected: {}", orderId, reason);
+            order.setRejectionReason(customerReason);
+            log.info("Order {} rejected: {}", orderId, internalDetail != null ? internalDetail : customerReason);
         } else {
             log.info("Order {} confirmed", orderId);
         }
