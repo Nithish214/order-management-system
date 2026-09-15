@@ -169,17 +169,23 @@ export default function ProductsPage() {
           {products.map((product) => (
             <div className="product-row" key={product.id}>
               <div className="product-row-main">
-                <div className="product-thumb">
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name} />
-                  ) : (
-                    <div className="product-thumb-placeholder" aria-hidden="true" />
-                  )}
-                </div>
-                <div className="product-info">
-                  <p className="product-name">{product.name}</p>
-                  <p className="product-sku text-muted">{product.sku}</p>
-                </div>
+                {/* Only the thumbnail + name/sku navigate to the product's own page --
+                    "Add to cart" and the admin upload button below stay independently
+                    clickable without triggering that navigation, since they're each
+                    their own action, not a link. */}
+                <Link to={`/products/${product.id}`} className="product-row-link">
+                  <div className="product-thumb">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} />
+                    ) : (
+                      <div className="product-thumb-placeholder" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="product-info">
+                    <p className="product-name">{product.name}</p>
+                    <p className="product-sku text-muted">{product.sku}</p>
+                  </div>
+                </Link>
                 <p className="product-price">${product.unitPrice.toFixed(2)}</p>
                 <button className="btn-secondary" onClick={() => cart.addItem(product)}>
                   Add to cart

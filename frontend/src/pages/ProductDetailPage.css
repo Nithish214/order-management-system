@@ -1,0 +1,86 @@
+/* One product, its own address (/products/:id) -- the image gets real room to breathe
+   here, unlike the 48px list thumbnail, but stays a plain bordered square rather than a
+   dramatic full-bleed hero -- this page is still "quiet, clean, functional," just with
+   more space given to the one thing (the photo) that's actually the point of visiting it. */
+
+.detail-page {
+  max-width: 760px;
+  margin: var(--space-5) auto 0;
+  padding: 0 var(--space-3) var(--space-6);
+}
+
+.detail-layout {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.detail-image {
+  flex: 1 1 280px;
+  max-width: 320px;
+  aspect-ratio: 1 / 1;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.detail-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detail-image-placeholder {
+  width: 100%;
+  height: 100%;
+  background: var(--color-border);
+}
+
+.detail-info {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.detail-sku {
+  margin: 0 0 var(--space-2);
+}
+
+.detail-name {
+  font-size: var(--text-xl-size);
+  line-height: var(--text-xl-line);
+  margin: 0 0 var(--space-3);
+}
+
+.detail-price {
+  font-size: var(--text-lg-size);
+  line-height: var(--text-lg-line);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--space-4);
+}
+
+.detail-quantity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.detail-quantity-row .quantity-stepper button {
+  width: 32px;
+  height: 32px;
+}
+
+.detail-admin {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+@media (max-width: 480px) {
+  .detail-image {
+    max-width: none;
+  }
+}

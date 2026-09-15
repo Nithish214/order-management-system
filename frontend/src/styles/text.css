@@ -25,3 +25,9 @@
 .back-link:hover {
   text-decoration: underline;
 }
+
+/* Spacing-only companion to .text-error, for an error message sitting near the top of a
+   page's content (as opposed to .auth-error's tighter form-field spacing). */
+.page-error {
+  margin: 0 0 var(--space-3);
+}

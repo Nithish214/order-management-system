@@ -4,6 +4,7 @@ import { CartProvider } from "./cart/CartContext";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import ProductsPage from "./pages/ProductsPage";
+import ProductDetailPage from "./pages/ProductDetailPage";
 import OrderStatusPage from "./pages/OrderStatusPage";
 import OrderHistoryPage from "./pages/OrderHistoryPage";
 
@@ -41,6 +42,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ProductsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/products/:id"
+        element={
+          <ProtectedRoute>
+            <ProductDetailPage />
           </ProtectedRoute>
         }
       />

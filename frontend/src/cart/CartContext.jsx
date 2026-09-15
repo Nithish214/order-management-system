@@ -11,12 +11,15 @@ export function CartProvider({ children }) {
   // Cart items shaped as: { productId, sku, name, unitPrice, quantity }
   const [items, setItems] = useState([]);
 
-  function addItem(product) {
+  // quantity defaults to 1 -- every existing caller (ProductsPage's plain "Add to cart"
+  // button) keeps its exact original behavior unchanged. The new product detail page is
+  // the only caller that passes a chosen quantity explicitly.
+  function addItem(product, quantity = 1) {
     setItems((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
       if (existing) {
         return prev.map((item) =>
-          item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.productId === product.id ? { ...item, quantity: item.quantity + quantity } : item
         );
       }
       return [
@@ -26,7 +29,7 @@ export function CartProvider({ children }) {
           sku: product.sku,
           name: product.name,
           unitPrice: product.unitPrice,
-          quantity: 1,
+          quantity,
         },
       ];
     });
