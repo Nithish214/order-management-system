@@ -237,11 +237,19 @@ aws cognito-idp create-user-pool --pool-name order-management-users --region eu-
   --username-attributes email
 
 # App client — no secret (Postman/curl call Cognito directly, not via a confidential backend),
-# USER_PASSWORD_AUTH enabled so InitiateAuth (below) works without a browser redirect
+# USER_PASSWORD_AUTH enabled so InitiateAuth (below) works without a browser redirect.
+# --prevent-user-existence-errors ENABLED (added in Phase 8, originally missing from this
+# command) makes Cognito respond with the same NotAuthorizedException for "wrong password"
+# and "no such email" alike, instead of a distinct UserNotFoundException for the latter --
+# without it, AuthController's login error mapping (which only maps NotAuthorizedException
+# to 401) sends a nonexistent email down its generic 400 path instead. It also happens to
+# be the anti-enumeration hardening AWS itself recommends: a caller probing logins can no
+# longer tell which emails are actually registered from the response alone.
 aws cognito-idp create-user-pool-client --user-pool-id <pool-id> \
   --client-name order-management-app-client \
   --no-generate-secret \
-  --explicit-auth-flows ALLOW_USER_PASSWORD_AUTH ALLOW_REFRESH_TOKEN_AUTH
+  --explicit-auth-flows ALLOW_USER_PASSWORD_AUTH ALLOW_REFRESH_TOKEN_AUTH \
+  --prevent-user-existence-errors ENABLED
 
 # The group the restock route checks for
 aws cognito-idp create-group --user-pool-id <pool-id> \
