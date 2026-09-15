@@ -42,6 +42,11 @@ public class OrderStatusUpdater {
         }
         order.setStatus(status);
         if (status == OrderStatus.REJECTED) {
+            // Persisted now, not just logged -- see Order.rejectionReason's comment for why
+            // this stopped being safe to discard once a second, unrelated cause of
+            // REJECTED (a declined payment) existed alongside the original one
+            // (insufficient stock).
+            order.setRejectionReason(reason);
             log.info("Order {} rejected: {}", orderId, reason);
         } else {
             log.info("Order {} confirmed", orderId);

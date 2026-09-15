@@ -95,6 +95,15 @@ export default function OrderStatusPage() {
 
       <Stepper status={order.status} />
 
+      {/* rejectionReason is only ever set for REJECTED, and only tells you *why* -- Stepper's
+          box next to it just says "Rejected" now, not a guessed cause. REJECTED can mean
+          either "not enough stock" (Inventory Service) or "payment declined" (Payment
+          Service) -- two unrelated causes that share one status, so guessing one in the
+          label was only ever right about half the time going forward. */}
+      {order.status === "REJECTED" && order.rejectionReason && (
+        <p style={{ color: "crimson", marginTop: 4 }}>{order.rejectionReason}</p>
+      )}
+
       {CANCELLABLE_STATUSES.includes(order.status) && (
         <button onClick={handleCancel} disabled={cancelling} style={{ marginTop: 16 }}>
           {cancelling ? "Cancelling..." : "Cancel order"}
@@ -122,14 +131,19 @@ export default function OrderStatusPage() {
 // "Inventory reserved" and "confirmed" are the same backend event, not sequential steps,
 // so a fake middle step here would show something that never actually happens -- still
 // just two real steps, now with three possible outcomes for the second one: confirmed,
-// rejected (Inventory couldn't fulfill it), or cancelled (the customer cancelled it).
+// rejected, or cancelled (the customer cancelled it).
+//
+// REJECTED deliberately says nothing about *why* here -- it can now mean "Inventory
+// Service couldn't fulfill it" or "Payment Service declined it", two unrelated causes.
+// The actual reason (order.rejectionReason) is shown separately, right below the Stepper,
+// straight from whichever service actually decided it -- not guessed from the status alone.
 function Stepper({ status }) {
   const isConfirmed = status === "CONFIRMED";
   const isRejected = status === "REJECTED";
   const isCancelled = status === "CANCELLED";
   const isSettled = isConfirmed || isRejected || isCancelled;
 
-  const labels = { CONFIRMED: "Confirmed", REJECTED: "Out of stock", CANCELLED: "Cancelled" };
+  const labels = { CONFIRMED: "Confirmed", REJECTED: "Rejected", CANCELLED: "Cancelled" };
   const colors = { CONFIRMED: "green", REJECTED: "crimson", CANCELLED: "crimson" };
 
   return (

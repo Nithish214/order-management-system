@@ -18,6 +18,8 @@ public class OrderResponse {
     private OrderStatus status;
     private BigDecimal totalAmount;
     private LocalDateTime createdAt;
+    // Only ever populated when status is REJECTED -- null for every other status.
+    private String rejectionReason;
     private List<OrderItemResponse> items;
 
     public static OrderResponse from(Order order) {
@@ -27,6 +29,7 @@ public class OrderResponse {
         response.setStatus(order.getStatus());
         response.setTotalAmount(order.getTotalAmount());
         response.setCreatedAt(order.getCreatedAt());
+        response.setRejectionReason(order.getRejectionReason());
         response.setItems(order.getItems().stream().map(OrderItemResponse::from).toList());
         return response;
     }

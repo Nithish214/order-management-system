@@ -33,6 +33,15 @@ public class Order {
     @Column(name = "total_amount", nullable = false)
     private BigDecimal totalAmount;
 
+    // Only ever set when status is REJECTED -- the actual reason a consumer supplied
+    // (Inventory Service's stock-shortage message, or Payment Service's decline message),
+    // previously received and then discarded (only logged) by OrderStatusUpdater. Without
+    // this, the frontend had no way to distinguish "rejected for insufficient stock" from
+    // "rejected because payment was declined" -- it just guessed the former unconditionally,
+    // which was accurate before Payment Service existed and silently wrong afterward.
+    @Column(name = "rejection_reason")
+    private String rejectionReason;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
