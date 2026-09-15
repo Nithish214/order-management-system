@@ -82,7 +82,16 @@ public class ProductController {
     ) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found: " + id));
+        String previousImageUrl = product.getImageUrl();
         product.setImageUrl(request.getImageUrl());
+        // Best-effort cleanup of the file this product used to point at -- see
+        // ProductImageUploadService#deleteIfManaged for why a failure here never blocks
+        // the image change itself, which has already happened by this point. Skipped
+        // entirely when re-setting the same URL, so that's never mistaken for a genuine
+        // replacement and doesn't delete the very file just confirmed.
+        if (previousImageUrl != null && !previousImageUrl.equals(request.getImageUrl())) {
+            productImageUploadService.deleteIfManaged(previousImageUrl);
+        }
         return ResponseEntity.ok(ProductResponse.from(product));
     }
 }

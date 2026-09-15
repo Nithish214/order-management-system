@@ -1,8 +1,12 @@
 package com.learn.orderservice.service;
 
 import com.learn.orderservice.dto.ImageUploadUrlResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
@@ -18,6 +22,8 @@ import java.util.UUID;
 // ImageUploadUrlResponse's comment for the two-step flow this backs.
 @Service
 public class ProductImageUploadService {
+
+    private static final Logger log = LoggerFactory.getLogger(ProductImageUploadService.class);
 
     // Same bucket that already hosts the frontend (scripts/config.ps1's $FrontendBucket) --
     // reusing it means nothing new to provision, and its existing bucket policy already
@@ -37,9 +43,11 @@ public class ProductImageUploadService {
     );
 
     private final S3Presigner s3Presigner;
+    private final S3Client s3Client;
 
-    public ProductImageUploadService(S3Presigner s3Presigner) {
+    public ProductImageUploadService(S3Presigner s3Presigner, S3Client s3Client) {
         this.s3Presigner = s3Presigner;
+        this.s3Client = s3Client;
     }
 
     public ImageUploadUrlResponse createUploadUrl(Long productId, String contentType) {
@@ -72,5 +80,35 @@ public class ProductImageUploadService {
         PresignedPutObjectRequest presigned = s3Presigner.presignPutObject(presignRequest);
 
         return new ImageUploadUrlResponse(presigned.url().toString(), "https://" + cdnDomain + "/" + key);
+    }
+
+    // Called when a product's image is replaced -- every upload gets a brand new random
+    // key (see createUploadUrl's comment), which avoids a race between two near-
+    // simultaneous uploads clobbering each other, but means the *old* file would
+    // otherwise just sit there forever as an orphan once nothing points at it any more.
+    // This is best-effort on purpose: a failure here (a transient S3 blip, or the URL
+    // simply not being one of ours -- see the prefix check below) must never block the
+    // actual image change, which has already succeeded by the time this runs. Worst case
+    // if this fails, exactly one harmless orphaned file lingers -- the same situation
+    // this method exists to reduce, not a correctness problem either way.
+    public void deleteIfManaged(String previousImageUrl) {
+        if (previousImageUrl == null) {
+            return;
+        }
+
+        String urlPrefix = "https://" + cdnDomain + "/";
+        if (!previousImageUrl.startsWith(urlPrefix + "product-images/")) {
+            // Not one of our own uploads -- e.g. an admin set an external URL by hand.
+            // Nothing in our bucket to clean up, and nothing we'd have permission to
+            // delete outside product-images/ anyway (see ProductImageUploadPolicy).
+            return;
+        }
+
+        String key = previousImageUrl.substring(urlPrefix.length());
+        try {
+            s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+        } catch (Exception e) {
+            log.warn("Could not delete old product image {}: {}", previousImageUrl, e.getMessage());
+        }
     }
 }
