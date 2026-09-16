@@ -14,6 +14,20 @@ version: '3.9'
 # still JVMs and still benefit from the extra headroom. See DEPLOYMENT.md for the swap
 # file, still kept as a safety net.
 
+# Docker's default json-file log driver has NO size limit at all -- left unbounded, a
+# sustained burst of traffic (a load test, or just real usage growing) writes log lines
+# forever until the disk fills up completely. That's exactly what happened here once: the
+# disk hit 0 bytes free mid-load-test, which tripped every service's own disk-space health
+# check, which triggered autoheal to restart containers into a still-full disk -- corrupting
+# several images in the process. This caps every container's logs at 10MB x 3 rotated
+# files (~30MB max, oldest discarded first) so a busy period can never fill the disk via
+# logs again, regardless of how much traffic the app sees.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # Cache-aside layer in front of Inventory Service's read-heavy product endpoints. No
   # volume, unlike Kafka's implicit log storage or RDS -- a cache is, by definition, just
@@ -40,6 +54,7 @@ services:
     # datastore, where silently discarding data would be a real problem.
     command: redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru
     restart: unless-stopped
+    logging: *default-logging
 
   # Speaks the exact same wire protocol as Kafka -- order-service/inventory-service's
   # Kafka clients (KafkaTemplate, @KafkaListener, topics, consumer groups, everything)
@@ -72,6 +87,7 @@ services:
       - --kafka-addr=internal://0.0.0.0:9092
       - --advertise-kafka-addr=internal://redpanda:9092
     restart: unless-stopped
+    logging: *default-logging
 
   order-service:
     build:
@@ -92,6 +108,7 @@ services:
     ports:
       - "8081:8081"
     restart: unless-stopped
+    logging: *default-logging
     # Reports this container's status as healthy/unhealthy in `docker ps`/`docker inspect` --
     # on its own this does NOT make Docker restart anything (that's a Swarm-only behavior);
     # see the autoheal service below, which is what actually acts on this. start_period gives
@@ -132,6 +149,7 @@ services:
     ports:
       - "8082:8082"
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
       interval: 30s
@@ -164,6 +182,7 @@ services:
     ports:
       - "8083:8083"
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
       interval: 30s
@@ -200,6 +219,7 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
       interval: 30s
@@ -228,3 +248,4 @@ services:
       AUTOHEAL_CONTAINER_LABEL: all
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    logging: *default-logging
