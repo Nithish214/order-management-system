@@ -1,0 +1,13 @@
+/* Left-aligned like every other page in this app -- a centered error message would be
+   the one exception to that rule, not worth breaking it for. */
+.not-found-page {
+  max-width: 480px;
+  margin: var(--space-6) auto 0;
+  padding: 0 var(--space-3);
+}
+
+.not-found-page h1 {
+  font-size: var(--text-xl-size);
+  line-height: var(--text-xl-line);
+  margin: 0 0 var(--space-3);
+}

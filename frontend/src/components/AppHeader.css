@@ -1,0 +1,46 @@
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-3);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.app-header-brand {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.app-header-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm-size);
+}
+
+.app-header-nav a {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.app-header-nav a:hover {
+  text-decoration: underline;
+}
+
+/* Outlined, not filled -- deliberately distinct from the status badges (StatusBadge.css),
+   which use a filled subtle-tint treatment for order-lifecycle judgments. This is a role
+   indicator, not a status, so it gets its own quieter, different visual language rather
+   than borrowing one of the three status colors for something that isn't a status. */
+.app-header-admin-badge {
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid var(--color-accent);
+  border-radius: var(--radius-control);
+  color: var(--color-accent);
+  font-size: var(--text-xs-size);
+  font-weight: var(--font-weight-semibold);
+}

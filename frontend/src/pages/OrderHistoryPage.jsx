@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { friendlyErrorMessage } from "../utils/errors";
 import StatusBadge from "../components/StatusBadge";
+import AppHeader from "../components/AppHeader";
 import "./OrderHistoryPage.css";
 
 export default function OrderHistoryPage() {
@@ -38,48 +39,57 @@ export default function OrderHistoryPage() {
 
   if (loading) {
     return (
-      <div className="history-page">
-        <p className="text-muted">Loading order history...</p>
-      </div>
+      <>
+        <AppHeader />
+        <div className="history-page">
+          <p className="text-muted">Loading order history...</p>
+        </div>
+      </>
     );
   }
   if (error) {
     return (
-      <div className="history-page">
-        <p className="text-error">{error}</p>
-      </div>
+      <>
+        <AppHeader />
+        <div className="history-page">
+          <p className="text-error">{error}</p>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="history-page">
-      <p>
-        <Link to="/" className="back-link">
-          &larr; Back to products
-        </Link>
-      </p>
-      <h1>Order history</h1>
+    <>
+      <AppHeader />
+      <div className="history-page">
+        <p>
+          <Link to="/" className="back-link">
+            &larr; Back to products
+          </Link>
+        </p>
+        <h1>Order history</h1>
 
-      {orders.length === 0 ? (
-        <p className="text-muted">No orders yet.</p>
-      ) : (
-        <ul className="history-list">
-          {orders.map((order) => (
-            <li className="history-row" key={order.id}>
-              <div className="history-row-main">
-                <Link to={`/orders/${order.id}`} className="history-order-link">
-                  Order #{order.id}
-                </Link>
-                <StatusBadge status={order.status} />
-              </div>
-              <div className="history-row-meta text-muted">
-                <span>${order.totalAmount.toFixed(2)}</span>
-                <span>{new Date(order.createdAt).toLocaleString()}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+        {orders.length === 0 ? (
+          <p className="text-muted">No orders yet.</p>
+        ) : (
+          <ul className="history-list">
+            {orders.map((order) => (
+              <li className="history-row" key={order.id}>
+                <div className="history-row-main">
+                  <Link to={`/orders/${order.id}`} className="history-order-link">
+                    Order #{order.id}
+                  </Link>
+                  <StatusBadge status={order.status} />
+                </div>
+                <div className="history-row-meta text-muted">
+                  <span>${order.totalAmount.toFixed(2)}</span>
+                  <span>{new Date(order.createdAt).toLocaleString()}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
   );
 }

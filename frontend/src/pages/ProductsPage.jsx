@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { uploadProductImage } from "../api/productImages";
 import { useCart } from "../cart/CartContext";
+import CartSummary from "../cart/CartSummary";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
+import AppHeader from "../components/AppHeader";
 import "./ProductsPage.css";
 
 // This bucket also hosts this app's own frontend code -- kept in sync with the exact
@@ -17,8 +19,7 @@ const ACCEPTED_IMAGE_TYPES = "image/jpeg,image/png,image/webp";
 export default function ProductsPage() {
   const apiFetch = useApiFetch();
   const cart = useCart();
-  const { logout, isAdmin } = useAuth();
-  const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const fileInputRef = useRef(null);
 
   const [products, setProducts] = useState([]);
@@ -29,7 +30,6 @@ export default function ProductsPage() {
   const [stockByProductId, setStockByProductId] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [placingOrder, setPlacingOrder] = useState(false);
   // Which product the next file the user picks belongs to -- set the instant they click
   // "Upload image" on a specific row, read back once the shared hidden <input> fires its
   // onChange. uploadingId separately drives the per-row "Uploading..." state.
@@ -87,38 +87,6 @@ export default function ProductsPage() {
       cancelled = true;
     };
   }, [apiFetch]);
-
-  async function handlePlaceOrder() {
-    setPlacingOrder(true);
-    setError(null);
-    try {
-      const response = await apiFetch("/orders", {
-        method: "POST",
-        // No userId here -- the Gateway derives who's placing the order from the caller's
-        // own Cognito token (see UserIdentityHeaderFilter on the backend), never from
-        // anything the client sends. Sending one here now would just be ignored.
-        body: JSON.stringify({
-          items: cart.items.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        const body = await response.json();
-        throw new Error(body.message || "Failed to place order");
-      }
-
-      const order = await response.json();
-      cart.clear();
-      navigate(`/orders/${order.id}`);
-    } catch (err) {
-      setError(friendlyErrorMessage(err));
-    } finally {
-      setPlacingOrder(false);
-    }
-  }
 
   // One shared hidden file input for every row, rather than one per product -- a file
   // input has no visual presence of its own anyway, so there's nothing gained by
@@ -183,168 +151,107 @@ export default function ProductsPage() {
 
   if (loading) {
     return (
-      <div className="products-page">
-        <p className="text-muted">Loading products...</p>
-      </div>
+      <>
+        <AppHeader />
+        <div className="products-page">
+          <p className="text-muted">Loading products...</p>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="products-page">
-      <header className="page-header">
-        <h1>Products</h1>
-        <nav className="page-nav">
-          <Link to="/orders">Order history</Link>
-          <button onClick={logout} className="btn-secondary">
-            Log out
-          </button>
-        </nav>
-      </header>
+    <>
+      <AppHeader />
+      <div className="products-page">
+        <h1 className="products-heading">Products</h1>
 
-      {error && <p className="text-error page-error">{error}</p>}
+        {error && <p className="text-error page-error">{error}</p>}
 
-      {/* Shared by every row -- see handleUploadClick/handleFileSelected. hidden (not a
-          display:none style) is the plain HTML way to keep this out of the layout and
-          off-screen while still fully usable via fileInputRef.current.click(). */}
-      <input
-        type="file"
-        accept={ACCEPTED_IMAGE_TYPES}
-        ref={fileInputRef}
-        onChange={handleFileSelected}
-        hidden
-      />
+        {/* Shared by every row -- see handleUploadClick/handleFileSelected. hidden (not a
+            display:none style) is the plain HTML way to keep this out of the layout and
+            off-screen while still fully usable via fileInputRef.current.click(). */}
+        <input
+          type="file"
+          accept={ACCEPTED_IMAGE_TYPES}
+          ref={fileInputRef}
+          onChange={handleFileSelected}
+          hidden
+        />
 
-      <div className="products-layout">
-        <section className="product-list">
-          {products.map((product) => (
-            <div className="product-row" key={product.id}>
-              <div className="product-row-main">
-                {/* Only the thumbnail + name/sku navigate to the product's own page --
-                    "Add to cart" and the admin upload button below stay independently
-                    clickable without triggering that navigation, since they're each
-                    their own action, not a link. */}
-                <Link to={`/products/${product.id}`} className="product-row-link">
-                  <div className="product-thumb">
-                    {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} />
-                    ) : (
-                      <div className="product-thumb-placeholder" aria-hidden="true" />
-                    )}
-                  </div>
-                  <div className="product-info">
-                    <p className="product-name">{product.name}</p>
-                    <p className="product-sku text-muted">{product.sku}</p>
-                  </div>
-                </Link>
-                <StockCount quantity={stockByProductId[product.id]} />
-                <p className="product-price">${product.unitPrice.toFixed(2)}</p>
-                <button className="btn-secondary" onClick={() => cart.addItem(product)}>
-                  Add to cart
-                </button>
-              </div>
-              {isAdmin && (
-                <div className="product-row-admin">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => handleUploadClick(product.id)}
-                    disabled={uploadingId === product.id}
-                  >
-                    {uploadingId === product.id
-                      ? "Uploading..."
-                      : product.imageUrl
-                        ? "Change image"
-                        : "Upload image"}
+        <div className="products-layout">
+          <section className="product-list">
+            {products.map((product) => (
+              <div className="product-row" key={product.id}>
+                <div className="product-row-main">
+                  {/* Only the thumbnail + name/sku navigate to the product's own page --
+                      "Add to cart" and the admin upload button below stay independently
+                      clickable without triggering that navigation, since they're each
+                      their own action, not a link. */}
+                  <Link to={`/products/${product.id}`} className="product-row-link">
+                    <div className="product-thumb">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt={product.name} />
+                      ) : (
+                        <div className="product-thumb-placeholder" aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className="product-info">
+                      <p className="product-name">{product.name}</p>
+                      <p className="product-sku text-muted">{product.sku}</p>
+                    </div>
+                  </Link>
+                  <StockCount quantity={stockByProductId[product.id]} />
+                  <p className="product-price">${product.unitPrice.toFixed(2)}</p>
+                  <button className="btn-secondary" onClick={() => cart.addItem(product)}>
+                    Add to cart
                   </button>
-                  <div className="restock-control">
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="Qty"
-                      value={restockInputs[product.id] ?? ""}
-                      onChange={(e) =>
-                        setRestockInputs((prev) => ({ ...prev, [product.id]: e.target.value }))
-                      }
-                      aria-label={`Quantity to restock for ${product.name}`}
-                    />
+                </div>
+                {isAdmin && (
+                  <div className="product-row-admin">
                     <button
                       type="button"
                       className="btn-secondary"
-                      onClick={() => handleRestock(product.id)}
-                      disabled={restockingId === product.id}
+                      onClick={() => handleUploadClick(product.id)}
+                      disabled={uploadingId === product.id}
                     >
-                      {restockingId === product.id ? "Restocking..." : "Restock"}
+                      {uploadingId === product.id
+                        ? "Uploading..."
+                        : product.imageUrl
+                          ? "Change image"
+                          : "Upload image"}
                     </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </section>
-
-        <aside className="cart-summary">
-          <h2>Cart</h2>
-          {cart.items.length === 0 ? (
-            <p className="text-muted">Cart is empty.</p>
-          ) : (
-            <>
-              <ul className="cart-items">
-                {cart.items.map((item) => (
-                  <li className="cart-item" key={item.productId}>
-                    <div className="cart-item-info">
-                      <p className="cart-item-name">{item.name}</p>
-                      <p className="cart-item-line-total">
-                        ${(item.unitPrice * item.quantity).toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="cart-item-controls">
-                      <div className="quantity-stepper">
-                        <button
-                          type="button"
-                          onClick={() => cart.setQuantity(item.productId, item.quantity - 1)}
-                          aria-label={`Decrease quantity of ${item.name}`}
-                        >
-                          &minus;
-                        </button>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) =>
-                            cart.setQuantity(item.productId, Number(e.target.value))
-                          }
-                          aria-label={`Quantity of ${item.name}`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => cart.setQuantity(item.productId, item.quantity + 1)}
-                          aria-label={`Increase quantity of ${item.name}`}
-                        >
-                          +
-                        </button>
-                      </div>
+                    <div className="restock-control">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Qty"
+                        value={restockInputs[product.id] ?? ""}
+                        onChange={(e) =>
+                          setRestockInputs((prev) => ({ ...prev, [product.id]: e.target.value }))
+                        }
+                        aria-label={`Quantity to restock for ${product.name}`}
+                      />
                       <button
                         type="button"
-                        className="cart-remove"
-                        onClick={() => cart.removeItem(item.productId)}
+                        className="btn-secondary"
+                        onClick={() => handleRestock(product.id)}
+                        disabled={restockingId === product.id}
                       >
-                        Remove
+                        {restockingId === product.id ? "Restocking..." : "Restock"}
                       </button>
                     </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="cart-total">
-                <span>Total</span>
-                <strong>${cart.total.toFixed(2)}</strong>
+                  </div>
+                )}
               </div>
-              <button className="btn-primary" onClick={handlePlaceOrder} disabled={placingOrder}>
-                {placingOrder ? "Placing order..." : "Place order"}
-              </button>
-            </>
-          )}
-        </aside>
+            ))}
+          </section>
+
+          <aside className="cart-sidebar">
+            <CartSummary />
+          </aside>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

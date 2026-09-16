@@ -7,6 +7,8 @@ import ProductsPage from "./pages/ProductsPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
 import OrderStatusPage from "./pages/OrderStatusPage";
 import OrderHistoryPage from "./pages/OrderHistoryPage";
+import CartPage from "./pages/CartPage";
+import NotFoundPage from "./pages/NotFoundPage";
 
 // The "protected route" pattern: a wrapper that checks auth state and either renders
 // its children or redirects. <Navigate> is React Router's declarative way to redirect --
@@ -69,6 +71,19 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/cart"
+        element={
+          <ProtectedRoute>
+            <CartPage />
+          </ProtectedRoute>
+        }
+      />
+      {/* Deliberately NOT wrapped in ProtectedRoute -- an unmatched URL should show a
+          plain "not found" page regardless of login state, not redirect to /login as if
+          the real problem were your session. "*" matches anything none of the routes
+          above already claimed. */}
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

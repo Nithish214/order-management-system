@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { friendlyErrorMessage } from "../utils/errors";
+import AppHeader from "../components/AppHeader";
 import "./OrderStatusPage.css";
 
 const POLL_INTERVAL_MS = 3000;
@@ -86,49 +87,66 @@ export default function OrderStatusPage() {
     }
   }
 
-  if (error) return <p className="text-error">{error}</p>;
-  if (!order) return <p className="text-muted">Loading order...</p>;
+  if (error) {
+    return (
+      <>
+        <AppHeader />
+        <p className="text-error">{error}</p>
+      </>
+    );
+  }
+  if (!order) {
+    return (
+      <>
+        <AppHeader />
+        <p className="text-muted">Loading order...</p>
+      </>
+    );
+  }
 
   return (
-    <div className="status-page">
-      <p>
-        <Link to="/" className="back-link">
-          &larr; Back to products
-        </Link>
-      </p>
-      <h1>Order #{order.id}</h1>
+    <>
+      <AppHeader />
+      <div className="status-page">
+        <p>
+          <Link to="/" className="back-link">
+            &larr; Back to products
+          </Link>
+        </p>
+        <h1>Order #{order.id}</h1>
 
-      <Stepper status={order.status} />
-      {/* key={order.status}: forces a fresh element (and a fresh play of its entrance
-          animation) only when the status actually changes, not on every 3s poll tick that
-          comes back with the same status. */}
-      <OutcomeSummary
-        key={order.status}
-        status={order.status}
-        rejectionReason={order.rejectionReason}
-      />
+        <Stepper status={order.status} />
+        {/* key={order.status}: forces a fresh element (and a fresh play of its entrance
+            animation) only when the status actually changes, not on every 3s poll tick
+            that comes back with the same status. */}
+        <OutcomeSummary
+          key={order.status}
+          status={order.status}
+          rejectionReason={order.rejectionReason}
+        />
 
-      {CANCELLABLE_STATUSES.includes(order.status) && (
-        <button onClick={handleCancel} disabled={cancelling} className="btn-secondary cancel-button">
-          {cancelling ? "Cancelling..." : "Cancel order"}
-        </button>
-      )}
+        {CANCELLABLE_STATUSES.includes(order.status) && (
+          <button onClick={handleCancel} disabled={cancelling} className="btn-secondary cancel-button">
+            {cancelling ? "Cancelling..." : "Cancel order"}
+          </button>
+        )}
 
-      <ul className="order-items">
-        {order.items.map((item) => (
-          <li className="order-item" key={item.productId}>
-            <span>
-              Product #{item.productId} &times; {item.quantity}
-            </span>
-            <span>${item.lineTotal.toFixed(2)}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="order-total">
-        <span>Total</span>
-        <strong>${order.totalAmount.toFixed(2)}</strong>
+        <ul className="order-items">
+          {order.items.map((item) => (
+            <li className="order-item" key={item.productId}>
+              <span>
+                Product #{item.productId} &times; {item.quantity}
+              </span>
+              <span>${item.lineTotal.toFixed(2)}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="order-total">
+          <span>Total</span>
+          <strong>${order.totalAmount.toFixed(2)}</strong>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

@@ -1,0 +1,31 @@
+import { Link } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { useCart } from "../cart/CartContext";
+import "./AppHeader.css";
+
+// Persistent across every signed-in page (Products, Order History, Order Status, Cart) --
+// not the quiet auth pages, which stay deliberately bare. Fixes a real gap: before this,
+// "Log out" only existed on the Products page, so viewing your order history or an
+// order's status left you with no way to log out without navigating back to "/" first.
+export default function AppHeader() {
+  const { logout, isAdmin } = useAuth();
+  const cart = useCart();
+  const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+
+  return (
+    <header className="app-header">
+      <Link to="/" className="app-header-brand">
+        Order Management
+      </Link>
+      <nav className="app-header-nav">
+        <Link to="/">Products</Link>
+        <Link to="/orders">Order history</Link>
+        <Link to="/cart">Cart{itemCount > 0 ? ` (${itemCount})` : ""}</Link>
+        {isAdmin && <span className="app-header-admin-badge">Admin</span>}
+        <button onClick={logout} className="btn-secondary">
+          Log out
+        </button>
+      </nav>
+    </header>
+  );
+}
