@@ -1,9 +1,12 @@
 package com.learn.orderservice.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.orderservice.config.CorrelationIdFilter;
 import com.learn.orderservice.entity.OrderStatus;
 import com.learn.orderservice.event.InventoryOutcomeEvent;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +41,23 @@ public class InventoryOutcomeListener {
 
     @KafkaListener(topics = "inventory.failed", groupId = "order-service")
     @Transactional
-    public void onInventoryFailed(String message) throws Exception {
-        InventoryOutcomeEvent event = objectMapper.readValue(message, InventoryOutcomeEvent.class);
-        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.REJECTED, CUSTOMER_MESSAGE, event.getReason());
+    public void onInventoryFailed(
+            String message,
+            // required = false: covers a message published before this feature existed,
+            // or sent by some other producer that doesn't set this header -- falls back
+            // to processing normally, just without a correlation id attached to the logs.
+            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) String correlationId
+    ) throws Exception {
+        if (correlationId != null) {
+            MDC.put(CorrelationIdFilter.MDC_KEY, correlationId);
+        }
+        try {
+            InventoryOutcomeEvent event = objectMapper.readValue(message, InventoryOutcomeEvent.class);
+            orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.REJECTED, CUSTOMER_MESSAGE, event.getReason());
+        } finally {
+            if (correlationId != null) {
+                MDC.remove(CorrelationIdFilter.MDC_KEY);
+            }
+        }
     }
 }

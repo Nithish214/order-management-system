@@ -48,3 +48,11 @@ logging:
   level:
     org.hibernate.SQL: INFO
     org.hibernate.type.descriptor.sql.BasicBinder: INFO
+  pattern:
+    # %5p is Spring Boot's own default for this exact slot -- appending the correlation
+    # id here (rather than replacing the whole pattern) means every other part of the
+    # default log line format is untouched. %X{correlationId:-} reads the MDC key
+    # CorrelationIdFilter sets; the :- means "print nothing" instead of "print the
+    # literal text null" for the rare log line that runs before any filter/listener has
+    # set it (an @PostConstruct at startup, say).
+    level: "%5p [%X{correlationId:-}]"

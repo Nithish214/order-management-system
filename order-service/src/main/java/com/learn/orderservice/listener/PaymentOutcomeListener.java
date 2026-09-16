@@ -1,9 +1,12 @@
 package com.learn.orderservice.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.orderservice.config.CorrelationIdFilter;
 import com.learn.orderservice.entity.OrderStatus;
 import com.learn.orderservice.event.PaymentOutcomeEvent;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,15 +36,39 @@ public class PaymentOutcomeListener {
 
     @KafkaListener(topics = "payment.completed", groupId = "order-service")
     @Transactional
-    public void onPaymentCompleted(String message) throws Exception {
-        PaymentOutcomeEvent event = objectMapper.readValue(message, PaymentOutcomeEvent.class);
-        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.CONFIRMED, null, null);
+    public void onPaymentCompleted(
+            String message,
+            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) String correlationId
+    ) throws Exception {
+        if (correlationId != null) {
+            MDC.put(CorrelationIdFilter.MDC_KEY, correlationId);
+        }
+        try {
+            PaymentOutcomeEvent event = objectMapper.readValue(message, PaymentOutcomeEvent.class);
+            orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.CONFIRMED, null, null);
+        } finally {
+            if (correlationId != null) {
+                MDC.remove(CorrelationIdFilter.MDC_KEY);
+            }
+        }
     }
 
     @KafkaListener(topics = "payment.failed", groupId = "order-service")
     @Transactional
-    public void onPaymentFailed(String message) throws Exception {
-        PaymentOutcomeEvent event = objectMapper.readValue(message, PaymentOutcomeEvent.class);
-        orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.REJECTED, CUSTOMER_MESSAGE, event.getReason());
+    public void onPaymentFailed(
+            String message,
+            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) String correlationId
+    ) throws Exception {
+        if (correlationId != null) {
+            MDC.put(CorrelationIdFilter.MDC_KEY, correlationId);
+        }
+        try {
+            PaymentOutcomeEvent event = objectMapper.readValue(message, PaymentOutcomeEvent.class);
+            orderStatusUpdater.applyStatus(event.getOrderId(), OrderStatus.REJECTED, CUSTOMER_MESSAGE, event.getReason());
+        } finally {
+            if (correlationId != null) {
+                MDC.remove(CorrelationIdFilter.MDC_KEY);
+            }
+        }
     }
 }

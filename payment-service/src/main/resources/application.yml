@@ -41,3 +41,6 @@ spring:
 logging:
   level:
     org.hibernate.SQL: INFO
+  pattern:
+    # Same idiom as Order Service's identical addition -- see that file's comment.
+    level: "%5p [%X{correlationId:-}]"

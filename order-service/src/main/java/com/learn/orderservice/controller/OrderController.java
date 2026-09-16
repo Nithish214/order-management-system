@@ -198,6 +198,7 @@ public class OrderController {
         outboxEvent.setEventType("OrderCancelled");
         outboxEvent.setStatus(OutboxStatus.PENDING);
         outboxEvent.setPayload("{}");
+        outboxEvent.setCorrelationId(org.slf4j.MDC.get(com.learn.orderservice.config.CorrelationIdFilter.MDC_KEY));
         outboxEvent = outboxEventRepository.save(outboxEvent);
         outboxEvent.setPayload(buildOrderCancelledPayload(order, outboxEvent.getId()));
 

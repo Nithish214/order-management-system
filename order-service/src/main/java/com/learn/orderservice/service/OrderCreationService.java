@@ -8,6 +8,7 @@ import com.learn.orderservice.entity.*;
 import com.learn.orderservice.event.OutboxEventCreated;
 import com.learn.orderservice.repository.*;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -106,6 +107,11 @@ public class OrderCreationService {
         // (allocated by save()) before we can embed it in its own payload as the idempotency
         // key consumers will use. Overwritten below once that id exists.
         outboxEvent.setPayload("{}");
+        // Whatever CorrelationIdFilter put in MDC for this request -- captured here,
+        // once, rather than read again later at publish time, since publish can happen
+        // on a different thread or minutes later via the poller (see this field's own
+        // comment on the entity for the full reasoning).
+        outboxEvent.setCorrelationId(MDC.get(com.learn.orderservice.config.CorrelationIdFilter.MDC_KEY));
         outboxEvent = outboxEventRepository.save(outboxEvent);
         outboxEvent.setPayload(buildOrderCreatedPayload(savedOrder, outboxEvent.getId()));
 

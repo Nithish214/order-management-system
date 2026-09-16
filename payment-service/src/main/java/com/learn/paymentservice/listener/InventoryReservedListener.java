@@ -1,6 +1,7 @@
 package com.learn.paymentservice.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.paymentservice.config.CorrelationIdConstants;
 import com.learn.paymentservice.entity.OutboxEvent;
 import com.learn.paymentservice.entity.OutboxStatus;
 import com.learn.paymentservice.entity.Payment;
@@ -13,8 +14,10 @@ import com.learn.paymentservice.repository.PaymentRepository;
 import com.learn.paymentservice.repository.ProcessedEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +56,14 @@ public class InventoryReservedListener {
 
     @KafkaListener(topics = "inventory.reserved", groupId = "payment-service")
     @Transactional
-    public void onInventoryReserved(String message) throws Exception {
+    public void onInventoryReserved(
+            String message,
+            @Header(value = CorrelationIdConstants.CORRELATION_ID_HEADER, required = false) String correlationId
+    ) throws Exception {
+        if (correlationId != null) {
+            MDC.put(CorrelationIdConstants.MDC_KEY, correlationId);
+        }
+        try {
         InventoryReservedEvent event = objectMapper.readValue(message, InventoryReservedEvent.class);
         String eventId = event.getEventId();
 
@@ -92,6 +102,11 @@ public class InventoryReservedListener {
         // key downstream consumers will use. Overwritten below once that id exists --
         // identical two-step pattern to Order Service's OrderController.
         outboxEvent.setPayload("{}");
+        // Same reasoning as Order Service's OrderCreationService -- captured once, here,
+        // from whatever's in MDC right now (fed by the incoming inventory.reserved
+        // message's own header above), since OutboxPublisher.publish() may run on a
+        // different thread or minutes later via the poller.
+        outboxEvent.setCorrelationId(correlationId);
         outboxEvent = outboxEventRepository.save(outboxEvent);
         outboxEvent.setPayload(success
                 ? completedPayload(outboxEvent.getId(), event.getOrderId())
@@ -104,6 +119,11 @@ public class InventoryReservedListener {
 
         log.info("Payment {} for order {}: payment {}",
                 success ? "completed" : "failed", event.getOrderId(), payment.getPaymentId());
+        } finally {
+            if (correlationId != null) {
+                MDC.remove(CorrelationIdConstants.MDC_KEY);
+            }
+        }
     }
 
     private String completedPayload(Long eventId, Long orderId) {

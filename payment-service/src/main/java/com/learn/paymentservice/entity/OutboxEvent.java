@@ -49,4 +49,11 @@ public class OutboxEvent {
 
     @Column(name = "published_at")
     private LocalDateTime publishedAt;
+
+    // Same reasoning as Order Service's identical field -- stamped once at creation from
+    // MDC (here, fed by the incoming inventory.reserved Kafka message's own correlation
+    // header, not an HTTP request), read back by OutboxPublisher at send time regardless
+    // of which thread/how much later that turns out to be.
+    @Column(name = "correlation_id")
+    private String correlationId;
 }

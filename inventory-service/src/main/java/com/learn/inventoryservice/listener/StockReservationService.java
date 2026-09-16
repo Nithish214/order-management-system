@@ -1,6 +1,7 @@
 package com.learn.inventoryservice.listener;
 
 import com.learn.inventoryservice.cache.StockCache;
+import com.learn.inventoryservice.config.CorrelationIdFilter;
 import com.learn.inventoryservice.entity.OrderReservationItem;
 import com.learn.inventoryservice.entity.ProcessedEvent;
 import com.learn.inventoryservice.entity.ProductStock;
@@ -8,13 +9,18 @@ import com.learn.inventoryservice.event.OrderCreatedEvent;
 import com.learn.inventoryservice.repository.OrderReservationItemRepository;
 import com.learn.inventoryservice.repository.ProcessedEventRepository;
 import com.learn.inventoryservice.repository.ProductStockRepository;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -100,12 +106,12 @@ public class StockReservationService {
                 stockCache.delete(StockCache.itemKey(item.getProductId()));
             }
             stockCache.delete(StockCache.LIST_KEY);
-            kafkaTemplate.send("inventory.reserved", String.valueOf(event.getOrderId()),
+            sendWithCorrelation("inventory.reserved", String.valueOf(event.getOrderId()),
                     reservedPayload(event.getOrderId(), event.getTotalAmount()));
             log.info("Reserved stock for order {}", event.getOrderId());
         } else {
             String reason = String.join("; ", shortages);
-            kafkaTemplate.send("inventory.failed", String.valueOf(event.getOrderId()),
+            sendWithCorrelation("inventory.failed", String.valueOf(event.getOrderId()),
                     failedPayload(event.getOrderId(), reason));
             log.info("Insufficient stock for order {}: {}", event.getOrderId(), reason);
         }
@@ -129,9 +135,24 @@ public class StockReservationService {
         // Deliberately generic -- never leak internal contention details to whatever
         // eventually surfaces this reason to a customer, same reasoning as every other
         // inventory.failed reason in this service already follows.
-        kafkaTemplate.send("inventory.failed", String.valueOf(event.getOrderId()),
+        sendWithCorrelation("inventory.failed", String.valueOf(event.getOrderId()),
                 failedPayload(event.getOrderId(), "unable to reserve stock right now, please try again"));
         log.warn("Gave up reserving stock for order {} after repeated concurrent updates", event.getOrderId());
+    }
+
+    // Everything here (attemptReservation, recordConcurrencyFailure) is called
+    // synchronously, on the same thread OrderCreatedListener already set MDC on from the
+    // incoming order.created message's own header -- unlike Order Service/Payment
+    // Service's OutboxPublisher, there's no async hop or later-scheduled-poller path
+    // here to worry about, so reading straight from MDC (rather than needing a persisted
+    // column) is sufficient and simpler.
+    private void sendWithCorrelation(String topic, String key, String payload) {
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
+        List<Header> headers = correlationId == null
+                ? List.of()
+                : List.of(new RecordHeader(
+                        CorrelationIdFilter.CORRELATION_ID_HEADER, correlationId.getBytes(StandardCharsets.UTF_8)));
+        kafkaTemplate.send(new ProducerRecord<>(topic, null, key, payload, headers));
     }
 
     private String reservedPayload(Long orderId, BigDecimal totalAmount) {

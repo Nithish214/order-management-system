@@ -1,12 +1,15 @@
 package com.learn.inventoryservice.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.inventoryservice.config.CorrelationIdFilter;
 import com.learn.inventoryservice.entity.ProcessedEvent;
 import com.learn.inventoryservice.event.OrderCancelledEvent;
 import com.learn.inventoryservice.repository.ProcessedEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,16 +55,28 @@ public class OrderCancelledListener {
 
     @KafkaListener(topics = "order.cancelled", groupId = "inventory-service")
     @Transactional
-    public void onOrderCancelled(String message) throws Exception {
-        OrderCancelledEvent event = objectMapper.readValue(message, OrderCancelledEvent.class);
-        String eventId = String.valueOf(event.getEventId());
-
-        if (processedEventRepository.existsById(eventId)) {
-            log.info("Skipping already-processed event {}", eventId);
-            return;
+    public void onOrderCancelled(
+            String message,
+            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) String correlationId
+    ) throws Exception {
+        if (correlationId != null) {
+            MDC.put(CorrelationIdFilter.MDC_KEY, correlationId);
         }
+        try {
+            OrderCancelledEvent event = objectMapper.readValue(message, OrderCancelledEvent.class);
+            String eventId = String.valueOf(event.getEventId());
 
-        reservationReleaser.release(event.getOrderId());
-        processedEventRepository.save(new ProcessedEvent(eventId, LocalDateTime.now()));
+            if (processedEventRepository.existsById(eventId)) {
+                log.info("Skipping already-processed event {}", eventId);
+                return;
+            }
+
+            reservationReleaser.release(event.getOrderId());
+            processedEventRepository.save(new ProcessedEvent(eventId, LocalDateTime.now()));
+        } finally {
+            if (correlationId != null) {
+                MDC.remove(CorrelationIdFilter.MDC_KEY);
+            }
+        }
     }
 }

@@ -1,10 +1,13 @@
 package com.learn.inventoryservice.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.inventoryservice.config.CorrelationIdFilter;
 import com.learn.inventoryservice.event.OrderCreatedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
@@ -41,32 +44,48 @@ public class OrderCreatedListener {
     }
 
     @KafkaListener(topics = "order.created", groupId = "inventory-service")
-    public void onOrderCreated(String message) throws Exception {
-        OrderCreatedEvent event = objectMapper.readValue(message, OrderCreatedEvent.class);
+    public void onOrderCreated(
+            String message,
+            // This is where the correlation id crosses from "an order-service outbox
+            // row's persisted column" back into a live header on the wire -- see
+            // OutboxPublisher.publish() on the sending side. required = false covers a
+            // message from before this feature existed.
+            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) String correlationId
+    ) throws Exception {
+        if (correlationId != null) {
+            MDC.put(CorrelationIdFilter.MDC_KEY, correlationId);
+        }
+        try {
+            OrderCreatedEvent event = objectMapper.readValue(message, OrderCreatedEvent.class);
 
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            try {
-                stockReservationService.attemptReservation(event);
-                return;
-            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
-                // ObjectOptimisticLockingFailureException is Spring's translated form -- what
-                // actually surfaces here in practice, since the version-mismatch UPDATE is
-                // usually only detected when this call's transaction commits (at the end of
-                // attemptReservation), and Spring's JpaTransactionManager translates the
-                // jakarta.persistence.OptimisticLockException Hibernate throws at that point
-                // into this Spring exception before it propagates out to us. The plain JPA
-                // exception is caught too as a fallback, in case a future change makes
-                // attemptReservation flush mid-method instead (which throws the untranslated
-                // exception directly, since it happens inside the Spring Data proxy's own
-                // call rather than at commit).
-                if (attempt == MAX_ATTEMPTS) {
-                    log.warn("Order {}: still conflicting after {} attempts -- treating as a genuine failure",
-                            event.getOrderId(), attempt, ex);
-                    stockReservationService.recordConcurrencyFailure(event);
+            for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                try {
+                    stockReservationService.attemptReservation(event);
                     return;
+                } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+                    // ObjectOptimisticLockingFailureException is Spring's translated form -- what
+                    // actually surfaces here in practice, since the version-mismatch UPDATE is
+                    // usually only detected when this call's transaction commits (at the end of
+                    // attemptReservation), and Spring's JpaTransactionManager translates the
+                    // jakarta.persistence.OptimisticLockException Hibernate throws at that point
+                    // into this Spring exception before it propagates out to us. The plain JPA
+                    // exception is caught too as a fallback, in case a future change makes
+                    // attemptReservation flush mid-method instead (which throws the untranslated
+                    // exception directly, since it happens inside the Spring Data proxy's own
+                    // call rather than at commit).
+                    if (attempt == MAX_ATTEMPTS) {
+                        log.warn("Order {}: still conflicting after {} attempts -- treating as a genuine failure",
+                                event.getOrderId(), attempt, ex);
+                        stockReservationService.recordConcurrencyFailure(event);
+                        return;
+                    }
+                    log.info("Order {}: optimistic lock conflict on attempt {}/{} -- retrying with a fresh read",
+                            event.getOrderId(), attempt, MAX_ATTEMPTS);
                 }
-                log.info("Order {}: optimistic lock conflict on attempt {}/{} -- retrying with a fresh read",
-                        event.getOrderId(), attempt, MAX_ATTEMPTS);
+            }
+        } finally {
+            if (correlationId != null) {
+                MDC.remove(CorrelationIdFilter.MDC_KEY);
             }
         }
     }

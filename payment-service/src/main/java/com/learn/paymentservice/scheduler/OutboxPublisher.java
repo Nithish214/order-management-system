@@ -1,17 +1,23 @@
 package com.learn.paymentservice.scheduler;
 
+import com.learn.paymentservice.config.CorrelationIdConstants;
 import com.learn.paymentservice.entity.OutboxEvent;
 import com.learn.paymentservice.entity.OutboxStatus;
 import com.learn.paymentservice.repository.OutboxEventRepository;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -48,9 +54,22 @@ public class OutboxPublisher {
             return;
         }
 
+        // Same reasoning as Order Service's identical OutboxPublisher -- read from the
+        // row, not MDC, since this can run on the async listener's own executor thread
+        // or minutes later via the scheduled poller with no live request context at all.
+        String correlationId = event.getCorrelationId();
+        if (correlationId != null) {
+            MDC.put(CorrelationIdConstants.MDC_KEY, correlationId);
+        }
         try {
-            kafkaTemplate.send(topic, event.getAggregateId(), event.getPayload())
-                    .get(5, TimeUnit.SECONDS);
+            List<org.apache.kafka.common.header.Header> headers = correlationId == null
+                    ? List.of()
+                    : List.of(new RecordHeader(
+                            CorrelationIdConstants.CORRELATION_ID_HEADER, correlationId.getBytes(StandardCharsets.UTF_8)));
+            ProducerRecord<String, String> record = new ProducerRecord<>(
+                    topic, null, event.getAggregateId(), event.getPayload(), headers);
+
+            kafkaTemplate.send(record).get(5, TimeUnit.SECONDS);
             LocalDateTime now = LocalDateTime.now();
             event.setStatus(OutboxStatus.PUBLISHED);
             event.setPublishedAt(now);
@@ -62,6 +81,10 @@ public class OutboxPublisher {
             // Leave the row PENDING on any failure -- whichever path notices it next (the
             // scheduled poller, always) will simply try it again.
             log.warn("Failed to publish outbox event {} to topic {}: {}", event.getId(), topic, e.getMessage());
+        } finally {
+            if (correlationId != null) {
+                MDC.remove(CorrelationIdConstants.MDC_KEY);
+            }
         }
     }
 }

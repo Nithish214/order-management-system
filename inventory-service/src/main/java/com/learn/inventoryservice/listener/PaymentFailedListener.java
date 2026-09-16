@@ -1,12 +1,15 @@
 package com.learn.inventoryservice.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learn.inventoryservice.config.CorrelationIdFilter;
 import com.learn.inventoryservice.entity.ProcessedEvent;
 import com.learn.inventoryservice.event.PaymentFailedEvent;
 import com.learn.inventoryservice.repository.ProcessedEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,27 +53,39 @@ public class PaymentFailedListener {
 
     @KafkaListener(topics = "payment.failed", groupId = "inventory-service")
     @Transactional
-    public void onPaymentFailed(String message) throws Exception {
-        PaymentFailedEvent event = objectMapper.readValue(message, PaymentFailedEvent.class);
-        // Prefixed, not a bare String.valueOf(...): processed_event is one shared table
-        // fed by THREE independently-numbered id sequences in this service now --
-        // order.created/order.cancelled both use Order Service's own outbox id (one
-        // sequence, since they share a single outbox_event table there), and payment.failed
-        // uses Payment Service's own, completely separate outbox id, which also starts
-        // counting from 1 in its own database. Found live: Payment Service's outbox id 2
-        // collided with an order.created event's id "2" already sitting in this table from
-        // September 11th, days before Payment Service even existed -- every payment.failed
-        // in this test run was silently skipped as "already processed", and no stock was
-        // ever released. A bare integer id is only unique within the sequence that
-        // generated it, never across independently-numbered sequences sharing one table.
-        String eventId = "payment-failed:" + event.getEventId();
-
-        if (processedEventRepository.existsById(eventId)) {
-            log.info("Skipping already-processed event {}", eventId);
-            return;
+    public void onPaymentFailed(
+            String message,
+            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) String correlationId
+    ) throws Exception {
+        if (correlationId != null) {
+            MDC.put(CorrelationIdFilter.MDC_KEY, correlationId);
         }
+        try {
+            PaymentFailedEvent event = objectMapper.readValue(message, PaymentFailedEvent.class);
+            // Prefixed, not a bare String.valueOf(...): processed_event is one shared table
+            // fed by THREE independently-numbered id sequences in this service now --
+            // order.created/order.cancelled both use Order Service's own outbox id (one
+            // sequence, since they share a single outbox_event table there), and payment.failed
+            // uses Payment Service's own, completely separate outbox id, which also starts
+            // counting from 1 in its own database. Found live: Payment Service's outbox id 2
+            // collided with an order.created event's id "2" already sitting in this table from
+            // September 11th, days before Payment Service even existed -- every payment.failed
+            // in this test run was silently skipped as "already processed", and no stock was
+            // ever released. A bare integer id is only unique within the sequence that
+            // generated it, never across independently-numbered sequences sharing one table.
+            String eventId = "payment-failed:" + event.getEventId();
 
-        reservationReleaser.release(event.getOrderId());
-        processedEventRepository.save(new ProcessedEvent(eventId, LocalDateTime.now()));
+            if (processedEventRepository.existsById(eventId)) {
+                log.info("Skipping already-processed event {}", eventId);
+                return;
+            }
+
+            reservationReleaser.release(event.getOrderId());
+            processedEventRepository.save(new ProcessedEvent(eventId, LocalDateTime.now()));
+        } finally {
+            if (correlationId != null) {
+                MDC.remove(CorrelationIdFilter.MDC_KEY);
+            }
+        }
     }
 }

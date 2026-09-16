@@ -101,6 +101,12 @@ public class SecurityConfig {
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
+        // Unlike request headers, browsers only expose a small built-in safelist of
+        // RESPONSE headers to JS by default -- a custom one like this needs to be listed
+        // here explicitly, or `response.headers.get("X-Correlation-Id")` would silently
+        // return null in the browser despite the header genuinely being on the wire (see
+        // CorrelationIdFilter, which echoes it back on every response).
+        configuration.setExposedHeaders(List.of(CorrelationIdFilter.CORRELATION_ID_HEADER));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
