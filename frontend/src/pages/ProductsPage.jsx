@@ -181,6 +181,7 @@ export default function ProductsPage() {
 
         <div className="products-layout">
           <section className="product-list">
+            {products.length === 0 && <p className="text-muted">No products available right now.</p>}
             {products.map((product) => (
               <div className="product-row" key={product.id}>
                 <div className="product-row-main">
