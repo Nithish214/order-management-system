@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { useCart } from "./CartContext";
@@ -18,12 +18,33 @@ export default function CartSummary() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [error, setError] = useState(null);
 
+  // Regenerated only when the cart's actual contents change (an item added/removed, a
+  // quantity edited) -- deliberately NOT regenerated on every render and NOT on every click
+  // of "Place order". That's what makes this correct on both sides of the tradeoff: a
+  // network-failure retry of the exact same cart (the user just clicks the button again, or
+  // apiFetch itself silently retries once after a 401) reuses this same key, so Order
+  // Service recognizes it as the same attempt instead of creating a second order -- while
+  // actually changing what's in the cart before retrying gets a fresh key, so a stale
+  // success response for the old cart can never come back for a materially different order.
+  // A plain content comparison, not a reference one -- useMemo's own dependency comparison
+  // is by reference, and a new items array reference gets created on every cart edit
+  // regardless of whether the contents actually differ.
+  const cartContentsKey = JSON.stringify(cart.items);
+  // The memoized value (a random UUID) never reads cartContentsKey -- it's purely a
+  // change-trigger to force a fresh UUID exactly when the cart's contents change, same idea
+  // as this app's key={status} remount trick elsewhere (StatusBadge), just via useMemo
+  // instead of a remount. The lint rule can't tell "recompute because X changed" apart from
+  // "recompute using X", so it flags this as unused; it isn't.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const idempotencyKey = useMemo(() => crypto.randomUUID(), [cartContentsKey]);
+
   async function handlePlaceOrder() {
     setPlacingOrder(true);
     setError(null);
     try {
       const response = await apiFetch("/orders", {
         method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey },
         // No userId here -- the Gateway derives who's placing the order from the caller's
         // own Cognito token (see UserIdentityHeaderFilter on the backend), never from
         // anything the client sends. Sending one here now would just be ignored.

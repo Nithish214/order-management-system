@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
@@ -34,6 +35,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex) {
         return buildError(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    // Spring rejects a request missing a required @RequestHeader before the controller
+    // method ever runs -- this just gives that rejection the same ApiError shape as every
+    // other 400 in this service, instead of Spring Boot's generic default error body. The
+    // one required header this currently applies to is POST /orders' Idempotency-Key (see
+    // OrderController) -- required, not optional-with-a-fallback, so a caller that forgets
+    // it finds out immediately rather than unknowingly placing orders unprotected.
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiError> handleMissingHeader(MissingRequestHeaderException ex) {
+        return buildError(HttpStatus.BAD_REQUEST, "Missing required header: " + ex.getHeaderName());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
