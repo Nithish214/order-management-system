@@ -6,11 +6,13 @@ import com.learn.inventoryservice.dto.StockResponse;
 import com.learn.inventoryservice.entity.ProductStock;
 import com.learn.inventoryservice.repository.ProductStockRepository;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,12 +37,22 @@ public class StockController {
 
     private static final Logger log = LoggerFactory.getLogger(StockController.class);
 
+    // Same bounded-retry reasoning as the two Kafka listeners (OrderCreatedListener,
+    // ReservationReleaser): this is now a third writer to product_stock's versioned rows,
+    // and an admin clicking "Restock" the same moment an order reserves the last few units
+    // of that product is exactly the kind of brief, incidental conflict @Version exists to
+    // catch rather than silently lose.
+    private static final int MAX_ATTEMPTS = 3;
+
     private final ProductStockRepository productStockRepository;
     private final StockCache stockCache;
+    private final RestockService restockService;
 
-    public StockController(ProductStockRepository productStockRepository, StockCache stockCache) {
+    public StockController(ProductStockRepository productStockRepository, StockCache stockCache,
+                            RestockService restockService) {
         this.productStockRepository = productStockRepository;
         this.stockCache = stockCache;
+        this.restockService = restockService;
     }
 
     @GetMapping
@@ -77,23 +89,31 @@ public class StockController {
         return ResponseEntity.ok(response);
     }
 
+    // Deliberately calls out to RestockService.applyRestock() -- a separate bean -- rather
+    // than keeping that logic as a private method here. Retrying a same-class @Transactional
+    // method via a plain internal call bypasses Spring's proxy entirely (self-invocation),
+    // which would silently mean NO transaction at all on the retried attempts, not just a
+    // reused one -- see RestockService's comment.
     @PostMapping("/{productId}/restock")
-    @Transactional
     public ResponseEntity<StockResponse> restock(@PathVariable Long productId, @Valid @RequestBody RestockRequest request) {
-        ProductStock stock = productStockRepository.findById(productId)
-                .orElseThrow(() -> new EntityNotFoundException("No stock record for product: " + productId));
-        stock.setAvailableQuantity(stock.getAvailableQuantity() + request.getQuantity());
-        StockResponse response = StockResponse.from(stock);
-
-        // Invalidate both keys this change affects -- the item itself, and the list that
-        // embeds it. Deletes rather than re-populates (see StockCache#delete for why); the
-        // small window between this delete and the transaction's actual commit (a moment
-        // later, once this method returns and Spring's @Transactional proxy commits) is an
-        // accepted tradeoff here, not worth the added complexity of a proper post-commit
-        // hook for a single-writer admin action like restocking.
-        stockCache.delete(StockCache.itemKey(productId));
-        stockCache.delete(StockCache.LIST_KEY);
-
-        return ResponseEntity.ok(response);
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                return ResponseEntity.ok(restockService.applyRestock(productId, request));
+            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+                if (attempt == MAX_ATTEMPTS) {
+                    log.warn("Product {}: still conflicting after {} attempts restocking", productId, attempt, ex);
+                    // A genuine, if rare, failure to surface to the admin -- 409 Conflict is
+                    // the correct status for "the resource changed under you, try again",
+                    // and the retry already absorbed the case where trying again immediately
+                    // would have helped.
+                    return ResponseEntity.status(HttpStatus.CONFLICT).build();
+                }
+                log.info("Product {}: optimistic lock conflict restocking on attempt {}/{} -- retrying",
+                        productId, attempt, MAX_ATTEMPTS);
+            }
+        }
+        // Unreachable: the loop above always returns or throws by the time attempt ==
+        // MAX_ATTEMPTS, but the compiler can't see that.
+        return ResponseEntity.status(HttpStatus.CONFLICT).build();
     }
 }

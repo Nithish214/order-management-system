@@ -1,64 +1,62 @@
 package com.learn.inventoryservice.listener;
 
-import com.learn.inventoryservice.cache.StockCache;
-import com.learn.inventoryservice.entity.OrderReservationItem;
-import com.learn.inventoryservice.entity.ProductStock;
-import com.learn.inventoryservice.repository.OrderReservationItemRepository;
-import com.learn.inventoryservice.repository.ProductStockRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
+import jakarta.persistence.OptimisticLockException;
 
 // Credits back whatever this service actually reserved for an order (via
 // OrderReservationItem), then deletes those rows -- they're no longer active
-// reservations. Shared by OrderCancelledListener (order.cancelled) and the new
-// PaymentFailedListener (payment.failed): both mean the exact same thing to this service
-// -- "this order isn't happening any more, give the stock back" -- they just arrive from
-// two different sources, so the release logic itself shouldn't be duplicated.
+// reservations. Shared by OrderCancelledListener (order.cancelled) and
+// PaymentFailedListener (payment.failed): both mean the exact same thing to this service --
+// "this order isn't happening any more, give the stock back" -- they just arrive from two
+// different sources, so the release logic itself shouldn't be duplicated.
+//
+// Deliberately NOT @Transactional itself: this method's only job now is retrying
+// StockReleaseService.releaseAttempt(), and needs to call it fresh (through that bean's own
+// proxy) on each attempt to get a genuinely new transaction each time -- see
+// StockReleaseService's comment for why REQUIRES_NEW there is what actually makes that work
+// when called from inside an already-transactional caller.
 @Component
 public class ReservationReleaser {
 
     private static final Logger log = LoggerFactory.getLogger(ReservationReleaser.class);
 
-    private final OrderReservationItemRepository orderReservationItemRepository;
-    private final ProductStockRepository productStockRepository;
-    private final StockCache stockCache;
+    private static final int MAX_ATTEMPTS = 3;
 
-    public ReservationReleaser(
-            OrderReservationItemRepository orderReservationItemRepository,
-            ProductStockRepository productStockRepository,
-            StockCache stockCache
-    ) {
-        this.orderReservationItemRepository = orderReservationItemRepository;
-        this.productStockRepository = productStockRepository;
-        this.stockCache = stockCache;
+    private final StockReleaseService stockReleaseService;
+
+    public ReservationReleaser(StockReleaseService stockReleaseService) {
+        this.stockReleaseService = stockReleaseService;
     }
 
     public void release(Long orderId) {
-        List<OrderReservationItem> reserved = orderReservationItemRepository.findByOrderId(orderId);
-
-        if (reserved.isEmpty()) {
-            // Nothing was ever reserved for this order (rejected for stock before payment
-            // was ever attempted, or already released by the other caller) -- correctly
-            // nothing to release.
-            log.info("No reservation found for order {} -- nothing to release", orderId);
-            return;
-        }
-
-        for (OrderReservationItem item : reserved) {
-            ProductStock stock = productStockRepository.findById(item.getProductId()).orElse(null);
-            if (stock != null) {
-                stock.setAvailableQuantity(stock.getAvailableQuantity() + item.getQuantity());
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                stockReleaseService.releaseAttempt(orderId);
+                return;
+            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+                if (attempt == MAX_ATTEMPTS) {
+                    // Unlike OrderCreatedListener, there's no "inventory.failed"-style topic
+                    // for a release -- nothing downstream is synchronously waiting on a
+                    // release to succeed or fail the way Payment Service waits on a
+                    // reservation. So instead of inventing a new failure event, this just
+                    // rethrows: the caller (PaymentFailedListener/OrderCancelledListener) is
+                    // itself @Transactional, so its processed_event row never gets written
+                    // either, and Kafka's at-least-once delivery will redeliver the same
+                    // payment.failed/order.cancelled message later, when the contention has
+                    // presumably passed -- the existing idempotency guard makes that safe to
+                    // just let happen rather than handling it specially here.
+                    log.warn("Order {}: still conflicting after {} attempts releasing stock -- " +
+                            "giving up for now, will retry when Kafka redelivers this event",
+                            orderId, attempt, ex);
+                    throw ex;
+                }
+                log.info("Order {}: optimistic lock conflict releasing stock on attempt {}/{} -- " +
+                        "retrying with a fresh read", orderId, attempt, MAX_ATTEMPTS);
             }
-            // Without this, a cached stock:{id}/stock:list would stay stale after this
-            // release put stock back -- same reasoning as every other write path to
-            // product_stock.
-            stockCache.delete(StockCache.itemKey(item.getProductId()));
         }
-        stockCache.delete(StockCache.LIST_KEY);
-        orderReservationItemRepository.deleteByOrderId(orderId);
-        log.info("Released reserved stock for order {}", orderId);
     }
 }

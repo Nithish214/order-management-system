@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -26,4 +27,15 @@ public class ProductStock {
 
     @Column(name = "available_quantity", nullable = false)
     private Integer availableQuantity;
+
+    // Optimistic lock token (see V4__add_product_stock_version.sql). Hibernate reads this
+    // alongside every other column, appends "AND version = ?" to its UPDATE using the value
+    // it read, and sets the new value to old+1 -- all automatically, nothing in this class's
+    // own code ever reads or writes it directly. If some other transaction already updated
+    // (and so bumped) this row between our read and our write, the WHERE clause matches zero
+    // rows and Hibernate throws OptimisticLockException instead of silently applying a write
+    // based on data we now know was stale. No @Column needed: the field name "version"
+    // already matches the migration's column name.
+    @Version
+    private Long version;
 }
