@@ -16,9 +16,16 @@
   flex-wrap: wrap;
 }
 
-.detail-image {
+/* Wraps the main image, thumbnail strip, and (admin-only) per-image remove control --
+   sizing/max-width lives here so all three share one column instead of each guessing its
+   own width. */
+.detail-gallery {
   flex: 1 1 280px;
   max-width: 320px;
+}
+
+.detail-image {
+  width: 100%;
   aspect-ratio: 1 / 1;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-control);
@@ -37,6 +44,58 @@
   width: 100%;
   height: 100%;
   background: var(--color-border);
+}
+
+/* Small squares, not a scaled-down repeat of the 320px main image treatment -- same
+   reasoning as the product list's 48px .product-thumb: a thumbnail is a picker control,
+   not a second hero image. */
+.detail-thumb-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.detail-thumb {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--color-bg);
+  cursor: pointer;
+}
+
+.detail-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The accent border is the only signal for "this is the one showing above" -- no
+   overlay/checkmark needed on top of an already-small thumbnail. */
+.detail-thumb-selected {
+  border-color: var(--color-accent);
+  border-width: 2px;
+}
+
+.detail-thumb:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
+}
+
+.detail-image-admin {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.detail-image-admin-label {
+  margin: 0;
 }
 
 .detail-info {
@@ -88,7 +147,7 @@
 }
 
 @media (max-width: 480px) {
-  .detail-image {
+  .detail-gallery {
     max-width: none;
   }
 }

@@ -5,6 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "product")
 @Getter
@@ -26,9 +29,12 @@ public class Product {
     @Column(name = "unit_price", nullable = false)
     private java.math.BigDecimal unitPrice;
 
-    // Null until an admin uploads one. Points at the final CloudFront URL, not the S3 key --
-    // the actual bytes live in S3 (bucket: the same one hosting the frontend, under
-    // product-images/), this column just remembers where.
-    @Column(name = "image_url", length = 500)
-    private String imageUrl;
+    // Empty until an admin uploads one -- a product can have several (see ProductImage),
+    // ordered oldest-first (the same order they were uploaded in), which is what makes the
+    // first entry this product's cover/thumbnail image everywhere else in the app. cascade
+    // ALL + orphanRemoval: deleting an image from this list (see ProductController's DELETE
+    // endpoint) removes its row too, the same relationship Order already has with its items.
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    private List<ProductImage> images = new ArrayList<>();
 }

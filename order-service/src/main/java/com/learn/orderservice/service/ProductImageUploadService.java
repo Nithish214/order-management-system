@@ -25,6 +25,12 @@ public class ProductImageUploadService {
 
     private static final Logger log = LoggerFactory.getLogger(ProductImageUploadService.class);
 
+    // Bounds both S3 storage per product and the size of the thumbnail-strip gallery the
+    // frontend has to render -- ProductController checks this before minting an upload URL
+    // and again before actually adding the image, since two admins (or two tabs) could both
+    // pass the first check for the same product before either finishes uploading.
+    public static final int MAX_IMAGES_PER_PRODUCT = 6;
+
     // Same bucket that already hosts the frontend (scripts/config.ps1's $FrontendBucket) --
     // reusing it means nothing new to provision, and its existing bucket policy already
     // lets CloudFront read anything written here, no extra configuration needed for that.
@@ -82,33 +88,33 @@ public class ProductImageUploadService {
         return new ImageUploadUrlResponse(presigned.url().toString(), "https://" + cdnDomain + "/" + key);
     }
 
-    // Called when a product's image is replaced -- every upload gets a brand new random
-    // key (see createUploadUrl's comment), which avoids a race between two near-
-    // simultaneous uploads clobbering each other, but means the *old* file would
-    // otherwise just sit there forever as an orphan once nothing points at it any more.
-    // This is best-effort on purpose: a failure here (a transient S3 blip, or the URL
-    // simply not being one of ours -- see the prefix check below) must never block the
-    // actual image change, which has already succeeded by the time this runs. Worst case
-    // if this fails, exactly one harmless orphaned file lingers -- the same situation
-    // this method exists to reduce, not a correctness problem either way.
-    public void deleteIfManaged(String previousImageUrl) {
-        if (previousImageUrl == null) {
+    // Called whenever a ProductImage row stops pointing at a file -- an admin explicitly
+    // removing one image (ProductController's DELETE endpoint) being the only caller now
+    // that images are additive rather than replaced. Every upload gets a brand new random
+    // key (see createUploadUrl's comment), so this is the only way an orphaned file in S3
+    // ever gets cleaned up. Best-effort on purpose: a failure here (a transient S3 blip, or
+    // the URL simply not being one of ours -- see the prefix check below) must never block
+    // the actual deletion, which has already succeeded in the database by the time this
+    // runs. Worst case if this fails, exactly one harmless orphaned file lingers -- the
+    // same situation this method exists to reduce, not a correctness problem either way.
+    public void deleteIfManaged(String imageUrl) {
+        if (imageUrl == null) {
             return;
         }
 
         String urlPrefix = "https://" + cdnDomain + "/";
-        if (!previousImageUrl.startsWith(urlPrefix + "product-images/")) {
+        if (!imageUrl.startsWith(urlPrefix + "product-images/")) {
             // Not one of our own uploads -- e.g. an admin set an external URL by hand.
             // Nothing in our bucket to clean up, and nothing we'd have permission to
             // delete outside product-images/ anyway (see ProductImageUploadPolicy).
             return;
         }
 
-        String key = previousImageUrl.substring(urlPrefix.length());
+        String key = imageUrl.substring(urlPrefix.length());
         try {
             s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
         } catch (Exception e) {
-            log.warn("Could not delete old product image {}: {}", previousImageUrl, e.getMessage());
+            log.warn("Could not delete product image {}: {}", imageUrl, e.getMessage());
         }
     }
 }

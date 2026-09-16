@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
-import { uploadProductImage } from "../api/productImages";
+import { addProductImage } from "../api/productImages";
 import { useCart } from "../cart/CartContext";
 import CartSummary from "../cart/CartSummary";
 import { useAuth } from "../auth/AuthContext";
@@ -15,6 +15,12 @@ import "./ProductsPage.css";
 // rejected file type shows up immediately as a clear message here instead of only after
 // a round trip to the backend.
 const ACCEPTED_IMAGE_TYPES = "image/jpeg,image/png,image/webp";
+
+// Kept in sync with ProductImageUploadService.MAX_IMAGES_PER_PRODUCT (server-side) --
+// purely so this page can grey out "Add image" instead of letting an admin pick a file
+// only to have the upload rejected once it reaches the backend. The backend enforces this
+// for real; this is just an earlier, friendlier version of the same rule.
+const MAX_IMAGES_PER_PRODUCT = 6;
 
 export default function ProductsPage() {
   const apiFetch = useApiFetch();
@@ -107,10 +113,8 @@ export default function ProductsPage() {
     setUploadingId(productId);
     setError(null);
     try {
-      const updated = await uploadProductImage(apiFetch, productId, file);
-      setProducts((prev) =>
-        prev.map((product) => (product.id === updated.id ? { ...product, imageUrl: updated.imageUrl } : product))
-      );
+      const updated = await addProductImage(apiFetch, productId, file);
+      setProducts((prev) => prev.map((product) => (product.id === updated.id ? updated : product)));
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
@@ -191,8 +195,8 @@ export default function ProductsPage() {
                       their own action, not a link. */}
                   <Link to={`/products/${product.id}`} className="product-row-link">
                     <div className="product-thumb">
-                      {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} />
+                      {product.images.length > 0 ? (
+                        <img src={product.images[0].imageUrl} alt={product.name} />
                       ) : (
                         <div className="product-thumb-placeholder" aria-hidden="true" />
                       )}
@@ -214,13 +218,15 @@ export default function ProductsPage() {
                       type="button"
                       className="btn-secondary"
                       onClick={() => handleUploadClick(product.id)}
-                      disabled={uploadingId === product.id}
+                      disabled={uploadingId === product.id || product.images.length >= MAX_IMAGES_PER_PRODUCT}
                     >
                       {uploadingId === product.id
                         ? "Uploading..."
-                        : product.imageUrl
-                          ? "Change image"
-                          : "Upload image"}
+                        : product.images.length >= MAX_IMAGES_PER_PRODUCT
+                          ? "Max images reached"
+                          : product.images.length > 0
+                            ? "Add image"
+                            : "Upload image"}
                     </button>
                     <div className="restock-control">
                       <input

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
-import { uploadProductImage } from "../api/productImages";
+import { addProductImage, deleteProductImage } from "../api/productImages";
 import { useCart } from "../cart/CartContext";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
@@ -11,6 +11,10 @@ import "./ProductDetailPage.css";
 // Kept in sync with the same allowlist Order Service enforces server-side
 // (ProductImageUploadService) -- identical constant to ProductsPage's.
 const ACCEPTED_IMAGE_TYPES = "image/jpeg,image/png,image/webp";
+
+// Kept in sync with ProductImageUploadService.MAX_IMAGES_PER_PRODUCT (server-side) --
+// same reasoning as ProductsPage's copy of this constant.
+const MAX_IMAGES_PER_PRODUCT = 6;
 
 export default function ProductDetailPage() {
   const { id } = useParams();
@@ -29,6 +33,11 @@ export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deletingImageId, setDeletingImageId] = useState(null);
+  // Which of this product's images is shown large -- an index rather than an id so it
+  // stays meaningful (falls back to the new first image) even right after the currently
+  // selected image itself is deleted, see handleDeleteImage.
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [restockInput, setRestockInput] = useState("");
   const [restocking, setRestocking] = useState(false);
 
@@ -80,12 +89,34 @@ export default function ProductDetailPage() {
     setUploading(true);
     setError(null);
     try {
-      const updated = await uploadProductImage(apiFetch, product.id, file);
-      setProduct((prev) => ({ ...prev, imageUrl: updated.imageUrl }));
+      const updated = await addProductImage(apiFetch, product.id, file);
+      setProduct(updated);
+      // Jump to the image that was just added -- it's always last, since images are
+      // ordered oldest-first.
+      setSelectedImageIndex(updated.images.length - 1);
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleDeleteImage(imageId) {
+    setDeletingImageId(imageId);
+    setError(null);
+    try {
+      const updated = await deleteProductImage(apiFetch, product.id, imageId);
+      setProduct(updated);
+      // The selected index might now point past the end (deleted the last image) or land
+      // on a totally different image than before (deleted one earlier in the list, which
+      // shifted everything after it back by one) -- clamping to the new last valid index
+      // is simple and always leaves something sensible on screen, rather than a picked
+      // index this render finds nothing at.
+      setSelectedImageIndex((prev) => Math.min(prev, Math.max(0, updated.images.length - 1)));
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setDeletingImageId(null);
     }
   }
 
@@ -150,11 +181,51 @@ export default function ProductDetailPage() {
       </p>
 
       <div className="detail-layout">
-        <div className="detail-image">
-          {product.imageUrl ? (
-            <img src={product.imageUrl} alt={product.name} />
-          ) : (
-            <div className="detail-image-placeholder" aria-hidden="true" />
+        <div className="detail-gallery">
+          <div className="detail-image">
+            {product.images.length > 0 ? (
+              <img src={product.images[selectedImageIndex]?.imageUrl} alt={product.name} />
+            ) : (
+              <div className="detail-image-placeholder" aria-hidden="true" />
+            )}
+          </div>
+
+          {/* Only worth showing once there's an actual choice to make -- a single-image
+              product (still the common case) looks exactly like it did before this
+              feature existed. */}
+          {product.images.length > 1 && (
+            <div className="detail-thumb-strip">
+              {product.images.map((image, index) => (
+                <button
+                  key={image.id}
+                  type="button"
+                  className={"detail-thumb" + (index === selectedImageIndex ? " detail-thumb-selected" : "")}
+                  onClick={() => setSelectedImageIndex(index)}
+                  aria-label={`Show image ${index + 1} of ${product.images.length}`}
+                  aria-current={index === selectedImageIndex}
+                >
+                  <img src={image.imageUrl} alt="" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {isAdmin && product.images.length > 0 && (
+            <div className="detail-image-admin">
+              <p className="text-muted detail-image-admin-label">
+                {selectedImageIndex + 1} of {product.images.length} images
+              </p>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => handleDeleteImage(product.images[selectedImageIndex].id)}
+                disabled={deletingImageId !== null}
+              >
+                {deletingImageId === product.images[selectedImageIndex]?.id
+                  ? "Removing..."
+                  : "Remove this image"}
+              </button>
+            </div>
           )}
         </div>
 
@@ -212,9 +283,15 @@ export default function ProductDetailPage() {
                 type="button"
                 className="btn-secondary"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
+                disabled={uploading || product.images.length >= MAX_IMAGES_PER_PRODUCT}
               >
-                {uploading ? "Uploading..." : product.imageUrl ? "Change image" : "Upload image"}
+                {uploading
+                  ? "Uploading..."
+                  : product.images.length >= MAX_IMAGES_PER_PRODUCT
+                    ? "Max images reached"
+                    : product.images.length > 0
+                      ? "Add image"
+                      : "Upload image"}
               </button>
               <div className="restock-control">
                 <input
