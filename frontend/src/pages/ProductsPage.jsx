@@ -5,6 +5,7 @@ import { uploadProductImage } from "../api/productImages";
 import { useCart } from "../cart/CartContext";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
+import StockCount from "../components/StockCount";
 import "./ProductsPage.css";
 
 // This bucket also hosts this app's own frontend code -- kept in sync with the exact
@@ -21,6 +22,11 @@ export default function ProductsPage() {
   const fileInputRef = useRef(null);
 
   const [products, setProducts] = useState([]);
+  // Keyed by productId -- Inventory Service's own data (GET /stock), fetched alongside
+  // /products but kept as a separate map rather than merged into the product objects,
+  // since the two come from two different services and the same product's price/name
+  // and its live stock level can each change independently.
+  const [stockByProductId, setStockByProductId] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [placingOrder, setPlacingOrder] = useState(false);
@@ -29,6 +35,10 @@ export default function ProductsPage() {
   // onChange. uploadingId separately drives the per-row "Uploading..." state.
   const [uploadTargetId, setUploadTargetId] = useState(null);
   const [uploadingId, setUploadingId] = useState(null);
+  // One typed-but-not-yet-submitted restock value per row, so an admin can have several
+  // rows' inputs filled in at once without them interfering with each other.
+  const [restockInputs, setRestockInputs] = useState({});
+  const [restockingId, setRestockingId] = useState(null);
 
   // useEffect runs a side effect (anything that reaches outside this component, like a
   // network call) *after* React renders. The dependency array at the end, [], is what
@@ -41,10 +51,20 @@ export default function ProductsPage() {
 
     async function loadProducts() {
       try {
-        const response = await apiFetch("/products");
-        const data = await response.json();
+        // Two independent services, fetched together -- Order Service owns the product
+        // catalog, Inventory Service owns live stock. Promise.all so the wait is however
+        // long the slower of the two takes, not both added together in sequence.
+        const [productsResponse, stockResponse] = await Promise.all([
+          apiFetch("/products"),
+          apiFetch("/stock"),
+        ]);
+        const productsData = await productsResponse.json();
+        const stockData = await stockResponse.json();
         if (!cancelled) {
-          setProducts(data);
+          setProducts(productsData);
+          setStockByProductId(
+            Object.fromEntries(stockData.map((stock) => [stock.productId, stock.availableQuantity]))
+          );
         }
       } catch (err) {
         if (!cancelled) {
@@ -131,6 +151,36 @@ export default function ProductsPage() {
     }
   }
 
+  // Restocking ADDS the given quantity to whatever's currently there -- it's "a delivery
+  // of N more units arrived," never "set the count to N" (see StockController's comment
+  // on why there's deliberately no way to just overwrite a quantity outright).
+  async function handleRestock(productId) {
+    const quantity = Number(restockInputs[productId]);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setError("Enter a positive whole number to restock.");
+      return;
+    }
+
+    setRestockingId(productId);
+    setError(null);
+    try {
+      const response = await apiFetch(`/stock/${productId}/restock`, {
+        method: "POST",
+        body: JSON.stringify({ quantity }),
+      });
+      if (!response.ok) {
+        throw new Error("Could not restock this product");
+      }
+      const updated = await response.json();
+      setStockByProductId((prev) => ({ ...prev, [productId]: updated.availableQuantity }));
+      setRestockInputs((prev) => ({ ...prev, [productId]: "" }));
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setRestockingId(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="products-page">
@@ -186,6 +236,7 @@ export default function ProductsPage() {
                     <p className="product-sku text-muted">{product.sku}</p>
                   </div>
                 </Link>
+                <StockCount quantity={stockByProductId[product.id]} />
                 <p className="product-price">${product.unitPrice.toFixed(2)}</p>
                 <button className="btn-secondary" onClick={() => cart.addItem(product)}>
                   Add to cart
@@ -205,6 +256,26 @@ export default function ProductsPage() {
                         ? "Change image"
                         : "Upload image"}
                   </button>
+                  <div className="restock-control">
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Qty"
+                      value={restockInputs[product.id] ?? ""}
+                      onChange={(e) =>
+                        setRestockInputs((prev) => ({ ...prev, [product.id]: e.target.value }))
+                      }
+                      aria-label={`Quantity to restock for ${product.name}`}
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => handleRestock(product.id)}
+                      disabled={restockingId === product.id}
+                    >
+                      {restockingId === product.id ? "Restocking..." : "Restock"}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

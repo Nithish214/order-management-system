@@ -121,8 +121,15 @@
    entire block simply doesn't render for anyone else (see ProductsPage.jsx's isAdmin
    check), not just hidden with CSS. */
 .product-row-admin {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin: var(--space-2) 0 0 calc(48px + var(--space-3));
 }
+
+/* .restock-control itself moved to styles/restock-control.css (global) once the product
+   detail page needed the identical control too. */
 
 .product-info {
   min-width: 0;

@@ -1,0 +1,10 @@
+.stock-count {
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+  white-space: nowrap;
+}
+
+.stock-count--out {
+  color: var(--color-error);
+  font-weight: var(--font-weight-semibold);
+}

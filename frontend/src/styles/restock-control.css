@@ -1,0 +1,25 @@
+/* Shared by the product list row and the product detail page's admin section -- a small
+   quantity input + button pair, restocking always ADDS the entered amount to whatever's
+   already there (see StockController's comment on why there's no "set to" option). */
+
+.restock-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.restock-control input {
+  width: 56px;
+  padding: var(--space-1);
+  text-align: center;
+  font-family: inherit;
+  font-size: var(--text-sm-size);
+  color: var(--color-text);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.restock-control input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
