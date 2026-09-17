@@ -15,3 +15,6 @@ $CloudFrontDomain = "dxxxxxxxxxxxxx.cloudfront.net"
 $DuckDnsDomain = "your-subdomain"
 $DuckDnsToken = "your-duckdns-token"
 $GatewayDomain = "your-subdomain.duckdns.org"
+# Free key from https://www.pexels.com/api/ -- used by bulk-upload-product-images.ps1
+# to search real stock photos by keyword. Also a real credential; never commit it.
+$PexelsApiKey = "your-pexels-api-key"
