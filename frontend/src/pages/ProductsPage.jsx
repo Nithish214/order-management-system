@@ -57,6 +57,10 @@ export default function ProductsPage() {
   // results comes back.
   const [searching, setSearching] = useState(false);
   const isFirstProductLoad = useRef(true);
+  // 0-indexed, matching the backend's Spring Data Pageable convention directly rather
+  // than translating back and forth -- only the *display* ("Page 1 of 4") adds 1.
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   // Stock: fetched exactly once, on mount -- unlike products (below), it never needs
   // refetching just because a search or category narrows down which rows are showing.
@@ -128,45 +132,64 @@ export default function ProductsPage() {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  // Products: re-fetched whenever debouncedQuery or selectedCategory changes. A search
-  // takes priority over a category selection when both happen to be set -- handleSearchChange/
-  // handleSelectCategory below keep them mutually exclusive from the UI side already
-  // (picking a category clears the search box and vice versa), but the precedence is
-  // enforced here too rather than only relying on the UI never letting both be set at
-  // once.
+  // Whenever the actual filter changes (not every keystroke -- debouncedQuery, not
+  // searchQuery), jump back to page 1. Without this, switching category/search while
+  // sitting on, say, page 3 would either show an unrelated page of the NEW result set
+  // or -- once that set has fewer pages -- silently go out of range. A separate effect
+  // rather than resetting page inline in handleSearchChange/handleSelectCategory: this
+  // reacts to the one thing that actually means "the filter changed," decoupled from
+  // exactly which handler caused it.
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedQuery, selectedCategory]);
+
+  // Products: re-fetched whenever debouncedQuery, selectedCategory, or page changes. A
+  // search takes priority over a category selection when both happen to be set --
+  // handleSearchChange/handleSelectCategory below keep them mutually exclusive from the
+  // UI side already (picking a category clears the search box and vice versa), but the
+  // precedence is enforced here too rather than only relying on the UI never letting
+  // both be set at once.
   useEffect(() => {
     let cancelled = false;
 
     async function loadProducts() {
       // Only the very first load blanks the whole page (see the `if (loading)` early
-      // return below) -- every search or category switch after that just flips the
-      // small inline `searching` indicator instead.
+      // return below) -- every search, category switch, or page change after that just
+      // flips the small inline `searching` indicator instead.
       if (isFirstProductLoad.current) {
         setLoading(true);
       } else {
         setSearching(true);
       }
       try {
+        // 100 matches ProductController's own DEFAULT_PAGE_SIZE -- passed explicitly
+        // rather than relying on that default so this stays correct even if the
+        // backend's default ever changes independently.
+        const params = new URLSearchParams({ page: String(page), size: "100" });
         let path;
         if (debouncedQuery) {
-          path = `/products/search?q=${encodeURIComponent(debouncedQuery)}`;
-        } else if (selectedCategory) {
-          path = `/products?category=${encodeURIComponent(selectedCategory)}`;
+          params.set("q", debouncedQuery);
+          path = `/products/search?${params}`;
         } else {
-          path = "/products";
+          if (selectedCategory) {
+            params.set("category", selectedCategory);
+          }
+          path = `/products?${params}`;
         }
         const response = await apiFetch(path);
         // The gateway's circuit breaker (api-gateway's FallbackController) can return a
         // real, non-array 503 response when order-service is unhealthy -- without this
-        // check, that shape would reach `.map()` below and crash on "not a function"
-        // instead of showing the fallback's own clear message.
+        // check, that shape would reach `data.content` below and crash instead of
+        // showing the fallback's own clear message.
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
           throw new Error(body.message || "Failed to load products");
         }
+        // { content, page, size, totalElements, totalPages } -- see PagedResponse.
         const data = await response.json();
         if (!cancelled) {
-          setProducts(data);
+          setProducts(data.content);
+          setTotalPages(data.totalPages);
         }
       } catch (err) {
         if (!cancelled) {
@@ -183,15 +206,15 @@ export default function ProductsPage() {
 
     loadProducts();
 
-    // The cleanup function: if this component unmounts, or the query/category changes
-    // again before this fetch finishes (e.g. clicking a different category right after
-    // typing something), this flips `cancelled` so the late-arriving response doesn't
-    // call setState on a stale request -- without it, a slow response for an OLDER
-    // selection could overwrite a newer, already-displayed result.
+    // The cleanup function: if this component unmounts, or the query/category/page
+    // changes again before this fetch finishes (e.g. clicking a different category
+    // right after typing something), this flips `cancelled` so the late-arriving
+    // response doesn't call setState on a stale request -- without it, a slow response
+    // for an OLDER selection could overwrite a newer, already-displayed result.
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, debouncedQuery, selectedCategory]);
+  }, [apiFetch, debouncedQuery, selectedCategory, page]);
 
   function handleSearchChange(value) {
     setSearchQuery(value);
@@ -318,6 +341,34 @@ export default function ProductsPage() {
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Only when there's more than one page -- a single-page result (the
+                common case for a category search, or the whole catalog once it's small
+                enough) has nothing to page through, so Previous/Next would just be two
+                permanently-disabled buttons taking up space for no reason. */}
+            {!searching && totalPages > 1 && (
+              <div className="product-pagination">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setPage((p) => p - 1)}
+                  disabled={page === 0}
+                >
+                  Previous
+                </button>
+                <span className="product-pagination-status">
+                  Page {page + 1} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={page + 1 >= totalPages}
+                >
+                  Next
+                </button>
               </div>
             )}
           </section>

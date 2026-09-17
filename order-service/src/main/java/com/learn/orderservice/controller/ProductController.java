@@ -4,6 +4,7 @@ import com.learn.orderservice.dto.AddProductImageRequest;
 import com.learn.orderservice.dto.CategoryResponse;
 import com.learn.orderservice.dto.ImageUploadUrlRequest;
 import com.learn.orderservice.dto.ImageUploadUrlResponse;
+import com.learn.orderservice.dto.PagedResponse;
 import com.learn.orderservice.dto.ProductResponse;
 import com.learn.orderservice.entity.Product;
 import com.learn.orderservice.entity.ProductImage;
@@ -12,6 +13,9 @@ import com.learn.orderservice.repository.ProductRepository;
 import com.learn.orderservice.service.ProductImageUploadService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +45,16 @@ import java.util.stream.Collectors;
 @RequestMapping("/products")
 public class ProductController {
 
+    // 100 balances two things: small enough that a page's worth of images (see
+    // Product.images' @BatchSize(size = 100)) fits in one extra batched query rather
+    // than several, and large enough that browsing 300+ products doesn't feel like
+    // constant clicking. MAX_PAGE_SIZE guards against a client (accidentally or not)
+    // requesting an enormous page and defeating the whole point of paginating -- these
+    // endpoints have no auth of their own (see this class's own comment on that), so
+    // nothing else stops a caller from asking for size=1000000 otherwise.
+    private static final int DEFAULT_PAGE_SIZE = 100;
+    private static final int MAX_PAGE_SIZE = 200;
+
     private final ProductRepository productRepository;
     private final ProductImageRepository productImageRepository;
     private final ProductImageUploadService productImageUploadService;
@@ -59,13 +73,12 @@ public class ProductController {
     // same as before this parameter existed -- an existing caller with no idea this filter
     // now exists keeps working exactly as it always did.
     //
-    // No pagination, deliberately, even now that this can return up to 50-ish rows: a
-    // ~50-item JSON response is a few tens of KB at most, trivial for a browser to receive
-    // and render as one CSS grid -- nowhere near the scale (typically many hundreds to
-    // thousands of rows) where pagination actually starts paying for its own complexity
-    // (page/size params, a total-count/has-more field, frontend pagination controls or
-    // infinite scroll). Worth revisiting if this catalog grows an order of magnitude
-    // larger; not worth building ahead of that need today.
+    // Paginated now (page/size, both optional, 0-indexed page to match Spring Data's own
+    // Pageable) -- was deliberately NOT paginated back when this returned ~50-ish rows (a
+    // few tens of KB, trivial for a browser either way), but the catalog since grew past
+    // the "an order of magnitude larger" mark that comment named as the point worth
+    // revisiting this at. See PagedResponse for the response shape this returns now
+    // instead of a plain array.
     @GetMapping
     // @Transactional here (and on getProduct below) now that ProductResponse.from() reads
     // product.getImages() -- that's a LAZY collection, so without an open session at the
@@ -73,11 +86,23 @@ public class ProductController {
     // silently fetching it. readOnly = true: these never write, which lets Hibernate skip
     // its usual dirty-checking work for the transaction.
     @Transactional(readOnly = true)
-    public ResponseEntity<List<ProductResponse>> getAllProducts(@RequestParam(required = false) String category) {
-        List<Product> results = (category == null || category.isBlank())
-                ? productRepository.findAll()
-                : productRepository.findByCategory(category);
-        return ResponseEntity.ok(results.stream().map(ProductResponse::from).toList());
+    public ResponseEntity<PagedResponse<ProductResponse>> getAllProducts(
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
+    ) {
+        Pageable pageable = PageRequest.of(page, clampPageSize(size));
+        Page<Product> results = (category == null || category.isBlank())
+                ? productRepository.findAll(pageable)
+                : productRepository.findByCategory(category, pageable);
+        return ResponseEntity.ok(PagedResponse.from(results.map(ProductResponse::from)));
+    }
+
+    // Shared by every paginated endpoint below -- keeps size within (1, MAX_PAGE_SIZE]
+    // rather than trusting whatever a caller passes straight through to PageRequest.of,
+    // which would throw its own (less clear) exception for a negative/zero size anyway.
+    private static int clampPageSize(int size) {
+        return Math.max(1, Math.min(size, MAX_PAGE_SIZE));
     }
 
     // Backs the sidebar/nav -- one row per category, with how many products are actually
@@ -102,14 +127,20 @@ public class ProductController {
     // Blank/missing q returns every product, same shape as plain GET /products -- lets the
     // frontend use one endpoint for "no search yet" and "actively searching" rather than
     // switching between two different calls as the user types and clears the search box.
+    // Paginated the same way GET /products now is -- see that method's comment.
     @GetMapping("/search")
     @Transactional(readOnly = true)
-    public ResponseEntity<List<ProductResponse>> searchProducts(@RequestParam(required = false) String q) {
+    public ResponseEntity<PagedResponse<ProductResponse>> searchProducts(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
+    ) {
+        Pageable pageable = PageRequest.of(page, clampPageSize(size));
         String prefixQuery = toPrefixTsQuery(q);
-        List<Product> results = prefixQuery.isEmpty()
-                ? productRepository.findAll()
-                : productRepository.searchByPrefixTsQuery(prefixQuery);
-        return ResponseEntity.ok(results.stream().map(ProductResponse::from).toList());
+        Page<Product> results = prefixQuery.isEmpty()
+                ? productRepository.findAll(pageable)
+                : productRepository.searchByPrefixTsQuery(prefixQuery, pageable);
+        return ResponseEntity.ok(PagedResponse.from(results.map(ProductResponse::from)));
     }
 
     // Turns raw user input ("web cam") into a Postgres tsquery string ("web:* & cam:*")

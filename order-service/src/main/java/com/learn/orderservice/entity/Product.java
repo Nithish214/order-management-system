@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,7 +47,16 @@ public class Product {
     // first entry this product's cover/thumbnail image everywhere else in the app. cascade
     // ALL + orphanRemoval: deleting an image from this list (see ProductController's DELETE
     // endpoint) removes its row too, the same relationship Order already has with its items.
+    //
+    // @BatchSize fixes a real N+1: this is a LAZY collection (the @OneToMany default),
+    // and ProductResponse.from() reads it for every product in a list -- without this,
+    // listing N products fires N+1 queries (one for the products, one MORE per product
+    // for its images). With this, Hibernate instead loads images for up to 100 products
+    // at once via a single "WHERE product_id IN (...)" query, however many products a
+    // given list actually needs images for. 100 matches the page size GET /products now
+    // uses (see ProductController) -- one page's worth of images in one extra query.
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id ASC")
+    @BatchSize(size = 100)
     private List<ProductImage> images = new ArrayList<>();
 }

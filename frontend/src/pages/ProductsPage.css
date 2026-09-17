@@ -182,6 +182,25 @@
   align-self: flex-start;
 }
 
+/* ---- Pagination -- centered row below the grid, not pinned to a corner: with the
+   category sidebar and cart sidebar both present, a corner-anchored control would sit
+   oddly close to one of them depending on viewport width. Centered under the grid
+   itself reads as "controls for this grid" regardless of how the three columns are
+   currently laid out. ---- */
+
+.product-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.product-pagination-status {
+  font-size: var(--text-sm-size);
+  color: var(--color-text-muted);
+}
+
 /* ---- Cart sidebar -- just sizing for where <CartSummary /> sits on THIS page. Its own
    visual styling (border/padding/item list/etc.) lives in cart/CartSummary.css, on the
    component's own root element -- kept as a distinct class name from that component's
