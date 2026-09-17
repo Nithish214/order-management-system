@@ -58,9 +58,8 @@
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
-        <!-- Backs the RequestRateLimiter gateway filter (RedisRateLimiter implementation):
-             the token-bucket counters themselves live in Redis (the same instance
-             inventory-service already uses for caching) so the limit is enforced correctly
+        <!-- Backs OrderCreationRateLimiterFilter's counters: the same Redis instance
+             inventory-service already uses for caching, so the limit is enforced correctly
              even though this Gateway can, in principle, run as more than one instance;
              an in-memory counter would let each instance enforce its own separate limit
              instead of one shared one. Reactive client (Lettuce, via this starter), matching
@@ -68,6 +67,16 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+        </dependency>
+
+        <!-- Circuit breaker for calls to order-service/inventory-service: reactor-resilience4j,
+             not the plain resilience4j starter, since this Gateway is reactive (WebFlux/Netty)
+             and the reactive variant's CircuitBreaker returns a Mono/Flux-friendly API instead of
+             wrapping a blocking call. Backs the CircuitBreaker gateway filter (application.yml)
+             and FallbackController. -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
         </dependency>
 
         <dependency>

@@ -30,6 +30,14 @@ export default function OrderStatusPage() {
     async function poll() {
       try {
         const response = await apiFetch(`/orders/${id}`);
+        if (!response.ok) {
+          // Covers the gateway's circuit-breaker fallback here too -- without this, a
+          // {"message": "..."} body would flow straight into setOrder() below, silently
+          // showing a broken-looking page (every field undefined) instead of the clear
+          // error + stopped polling the existing catch block already provides.
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.message || "Failed to load order status");
+        }
         const data = await response.json();
         if (cancelled) return;
 

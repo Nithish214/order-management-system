@@ -15,27 +15,59 @@ spring:
       # the ORDER_SERVICE_URL / INVENTORY_SERVICE_URL env vars in docker-compose.prod.yml --
       # inside Docker Compose, containers reach each other by service name, not "localhost"
       # (each container has its own network namespace; "localhost" there means itself).
+      # Each backend-service route below carries a CircuitBreaker filter, named per
+      # SERVICE (order-service-cb / inventory-service-cb) rather than one shared breaker
+      # for everything -- these two services fail independently in practice (one can be
+      # perfectly healthy while the other struggles), so tripping protection for calls to
+      # a healthy service just because an unrelated one is unhealthy would be wrong.
+      # Motivated directly by the 2026-09-16 disk-crash incident: this Gateway kept
+      # forwarding every request straight to an already-broken order-service the whole
+      # time, with nothing noticing "this dependency clearly isn't answering" and backing
+      # off -- see resilience4j config below and FallbackController for what actually
+      # happens once a breaker trips. Full instance-level tuning
+      # (failure-rate-threshold, wait-duration-in-open-state, slow-call handling) lives
+      # under resilience4j.circuitbreaker/timelimiter below, keyed by these same names.
       routes:
         - id: order-service-orders
           uri: ${order.service.url:http://localhost:8081}
           predicates:
             - Path=/orders/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: order-service-cb
+                fallbackUri: forward:/fallback/order-service
 
         - id: order-service-users
           uri: ${order.service.url:http://localhost:8081}
           predicates:
             - Path=/users/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: order-service-cb
+                fallbackUri: forward:/fallback/order-service
 
         - id: order-service-products
           uri: ${order.service.url:http://localhost:8081}
           predicates:
             - Path=/products/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: order-service-cb
+                fallbackUri: forward:/fallback/order-service
 
         - id: inventory-service-stock-read
           uri: ${inventory.service.url:http://localhost:8082}
           predicates:
             - Path=/stock/**
             - Method=GET
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: inventory-service-cb
+                fallbackUri: forward:/fallback/inventory-service
 
         # Now reachable through the Gateway again (Phase 3 hid it entirely instead of
         # authorizing it -- Phase 4 does this properly with a real group check in
@@ -45,6 +77,11 @@ spring:
           predicates:
             - Path=/stock/*/restock
             - Method=POST
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: inventory-service-cb
+                fallbackUri: forward:/fallback/inventory-service
 
       # CORS used to be configured here (spring.cloud.gateway.globalcors), but that mechanism
       # only applies to responses from requests that actually got routed to a backend --
@@ -70,6 +107,53 @@ spring:
           # follows it to Cognito's JWKS endpoint (its public signing keys), and uses those to
           # verify every incoming token's signature -- no key ever hardcoded here.
           issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_184lqspmP}
+
+# Tuning for the two circuit breakers named in the routes above (order-service-cb,
+# inventory-service-cb) -- identical settings for both today since they're the same kind
+# of dependency (an HTTP backend service) with no evidence yet that one needs different
+# thresholds than the other; split them apart here if that ever changes.
+resilience4j:
+  circuitbreaker:
+    instances:
+      order-service-cb: &circuit-breaker-defaults
+        # Count-based, not time-based: judges the last 10 calls, not "the last N
+        # seconds" -- more predictable under bursty traffic, where a time window could
+        # contain anywhere from 1 to 1000s of calls depending on load.
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        # Don't judge failure rate off too little data -- 5 calls minimum before the
+        # breaker will even consider tripping, so one unlucky failure right after
+        # startup can't immediately trip it on a near-empty window.
+        minimum-number-of-calls: 5
+        # Trip once half of the last 10 (post-minimum) calls failed -- deliberately not
+        # a higher bar: the 2026-09-16 incident showed a struggling service can keep
+        # accepting connections while failing/timing out on most of them, and the whole
+        # point of this feature is to notice that quickly, not wait for near-total failure.
+        failure-rate-threshold: 50
+        # A call that takes longer than this counts as a "slow call" for the rate below
+        # -- critical given the 2026-09-16 incident's actual symptom was HANGING
+        # requests, not clean fast error responses. A circuit breaker that only counted
+        # exceptions, not slow calls, would have missed that exact failure mode entirely.
+        slow-call-duration-threshold: 3s
+        slow-call-rate-threshold: 50
+        # Once open, reject calls immediately (no wasted wait on a known-bad dependency)
+        # for this long before trying again.
+        wait-duration-in-open-state: 15s
+        # After the wait, let a handful of real calls through to test recovery --
+        # succeed enough of them and the breaker closes again; keep failing and it
+        # reopens for another 15s.
+        permitted-number-of-calls-in-half-open-state: 3
+      inventory-service-cb: *circuit-breaker-defaults
+  timelimiter:
+    instances:
+      # Pairs with the circuit breaker above: without an actual cutoff, a "slow call"
+      # could mean waiting indefinitely, since nothing else here imposes a deadline on
+      # the downstream HTTP call. A timeout here counts as a failure for the circuit
+      # breaker's own accounting, same as a slow call or an exception.
+      order-service-cb:
+        timeout-duration: 5s
+      inventory-service-cb:
+        timeout-duration: 5s
 
 # Backs CognitoAuthClient (the BFF's server-side calls to Cognito for login/refresh) --
 # a separate pair of settings from the issuer-uri above, which is only ever used to

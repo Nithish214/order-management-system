@@ -22,6 +22,14 @@ export default function OrderHistoryPage() {
         // never from anything the client specifies. This is what actually fixes the
         // hardcoded-Alice gap, rather than just hardcoding a different ID instead.
         const response = await apiFetch("/orders/mine");
+        if (!response.ok) {
+          // Covers the gateway's circuit-breaker fallback ({"message": "..."}, not an
+          // order array) alongside any other non-2xx response -- without this check,
+          // that shape would reach setOrders() and crash the list render below on
+          // "orders.map is not a function" instead of showing a clear message.
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.message || "Failed to load order history");
+        }
         const data = await response.json();
         if (!cancelled) setOrders(data);
       } catch (err) {

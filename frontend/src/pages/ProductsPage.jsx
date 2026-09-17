@@ -64,6 +64,17 @@ export default function ProductsPage() {
           apiFetch("/products"),
           apiFetch("/stock"),
         ]);
+        // Neither of these was checked before -- harmless as long as every response was
+        // either a real product/stock array or a thrown network error, but the gateway's
+        // circuit breaker (api-gateway's FallbackController) can now return a real,
+        // non-array 503 response instead when a backend is unhealthy. Without this
+        // check, that shape would reach `.map()` below and crash on "not a function"
+        // instead of showing the fallback's own clear message.
+        if (!productsResponse.ok || !stockResponse.ok) {
+          const failed = !productsResponse.ok ? productsResponse : stockResponse;
+          const body = await failed.json().catch(() => ({}));
+          throw new Error(body.message || "Failed to load products");
+        }
         const productsData = await productsResponse.json();
         const stockData = await stockResponse.json();
         if (!cancelled) {
