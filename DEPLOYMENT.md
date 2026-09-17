@@ -4,6 +4,16 @@ Deploys the existing system (Order Service, Inventory Service, API Gateway, Kafk
 single, cost-conscious AWS setup. No new business features. Local dev (Oracle,
 `docker-compose.yml`, `mvn spring-boot:run`) is completely unaffected by anything here.
 
+> **Update, later:** local dev has since dropped Oracle entirely and moved to a local
+> Postgres container (see `docker-compose.yml`) -- the two dialects being different was
+> the whole reason `db/migration` (Oracle) and `db/migration-postgres` existed as
+> separate folders per service; with Oracle gone, `db/migration-postgres` was renamed to
+> `db/migration` and the old Oracle one deleted. Everything below is left as-written
+> because it's still the accurate history of *why* the Postgres migrations and
+> `application-prod.yml` exist in the first place -- just be aware the "Local dev" column
+> in the table right below, and any other Oracle mention past this point, describes how
+> things were at the time, not how they are now.
+
 ## What's different from local dev
 
 | | Local dev | AWS (this doc) |

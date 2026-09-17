@@ -33,11 +33,6 @@
             </dependency>
             <dependency>
                 <groupId>org.flywaydb</groupId>
-                <artifactId>flyway-database-oracle</artifactId>
-                <version>${flyway.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.flywaydb</groupId>
                 <artifactId>flyway-database-postgresql</artifactId>
                 <version>${flyway.version}</version>
             </dependency>
@@ -83,27 +78,17 @@
             <artifactId>flyway-core</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-database-oracle</artifactId>
-        </dependency>
-
-        <!-- As of Flyway 10, Postgres support is a separate module, same as Oracle above:
-             flyway-core alone gives an "Unsupported Database" error against Postgres. -->
+        <!-- As of Flyway 10, Postgres support is a separate module: flyway-core alone
+             gives an "Unsupported Database" error against Postgres. -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc11</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-
-        <!-- Local dev still uses Oracle (above); the deployed AWS environment uses this
-             instead, selected via SPRING_PROFILES_ACTIVE=prod. Both drivers coexisting on
-             the classpath is harmless, since datasource.driver-class-name picks one at runtime. -->
+        <!-- Postgres everywhere now -- local dev used to run against an Oracle XE
+             container (see git history if you ever need the old dual-dialect setup back),
+             but that's gone; this is the only DB driver this service needs, same as
+             payment-service, which was Postgres-only from day one. -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>

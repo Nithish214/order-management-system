@@ -1,4 +1,10 @@
 # Activated with SPRING_PROFILES_ACTIVE=prod (see docker-compose.prod.yml).
+#
+# Local dev and prod both run Postgres now, so this datasource block LOOKS identical to
+# the base file's -- it's repeated here, deliberately without base's localhost/inventorydb/
+# postgres fallback defaults, so a prod deployment that's missing DB_HOST/DB_NAME/
+# DB_USERNAME/DB_PASSWORD fails to start with a clear "property not set" error instead of
+# silently trying to connect to localhost with the dev defaults.
 spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}
@@ -16,4 +22,4 @@ spring:
 
   flyway:
     enabled: true
-    locations: classpath:db/migration-postgres
+    locations: classpath:db/migration

@@ -7,25 +7,28 @@ services:
     ports:
       - "6379:6379"
 
-  oracle:
-    image: gvenzl/oracle-xe:21-slim
-    container_name: order-oracle
+  # Replaces the old Oracle XE container -- local dev now runs against the same
+  # database engine as production (RDS Postgres), just a plain container instead of a
+  # managed instance. One Postgres server, two separate databases (orderdb, inventorydb)
+  # created by docker/postgres-init below -- mirrors docker-compose.prod.yml's "one RDS
+  # instance, two databases" pattern rather than needing two containers.
+  postgres:
+    image: postgres:16-alpine
+    container_name: order-postgres
     ports:
-      - "1521:1521"
-      - "5500:5500"
+      - "5432:5432"
     environment:
-      ORACLE_PASSWORD: admin123
-      APP_USER: app_user
-      APP_USER_PASSWORD: app_password
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     volumes:
-      - oracle_data:/opt/oracle/oradata
-      - ./docker/oracle-init:/container-entrypoint-initdb.d/startup
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "bash -lc 'echo > /dev/tcp/127.0.0.1/1521' || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 60s
+      start_period: 30s
 
   kafka:
     image: apache/kafka:3.7.0
@@ -51,4 +54,4 @@ services:
       CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
 
 volumes:
-  oracle_data:
+  postgres_data:

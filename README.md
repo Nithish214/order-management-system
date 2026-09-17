@@ -53,7 +53,7 @@ cloud deployment — rather than just reading about them.
 | **Inventory Service** | `inventory-service/` | 8082 | Owns live stock; consumes order events, reserves stock idempotently, publishes the outcome; releases reserved stock on cancellation or a failed payment |
 | **Payment Service** | `payment-service/` | 8083 | Consumes `inventory.reserved`, simulates a payment (~90% success), publishes `payment.completed`/`payment.failed` via its own outbox. No REST API of its own — pure Kafka consumer/producer |
 
-Each service has its own database (own Oracle user locally, own Postgres database on the same RDS instance in AWS) — no service reads another's tables directly. Payment Service is Postgres-only from day one (no local Oracle era to carry forward).
+Each service has its own database (own Postgres database locally, and its own Postgres database on the same RDS instance in AWS) — no service reads another's tables directly. Local dev used to run against Oracle XE; that's gone now, so every service is Postgres end to end.
 
 ## What this project actually demonstrates
 
@@ -63,12 +63,12 @@ Each service has its own database (own Oracle user locally, own Postgres databas
 - **Retry + dead-letter topic** — a failing consumer retries a bounded number of times, then the record is routed to a DLT instead of blocking the consumer indefinitely.
 - **API Gateway as the only public door** — the Gateway is the sole trust boundary: it validates every request's JWT and is the only service exposed to the internet at all.
 - **Authentication vs. authorization, cleanly separated** — AWS Cognito (a User Pool) handles authentication (issuing signed JWTs on login); the Gateway handles authorization (any valid token for most routes, a specific `admin` group claim for the restock route). Order Service and Inventory Service have zero auth code — they trust the Gateway completely, which only works because their ports stay off the public internet at the network level.
-- **Real AWS deployment** — RDS PostgreSQL (translated from the Oracle schema used locally), Dockerized services on EC2, least-privilege IAM (a role scoped to exactly the CloudWatch permissions needed, nothing more), and security groups that reference each other rather than open IP ranges.
+- **Real AWS deployment** — RDS PostgreSQL, Dockerized services on EC2, least-privilege IAM (a role scoped to exactly the CloudWatch permissions needed, nothing more), and security groups that reference each other rather than open IP ranges.
 
 ## Local development
 
 ```bash
-docker compose up -d oracle          # Oracle XE for local dev
+docker compose up -d postgres        # Postgres for local dev (creates orderdb + inventorydb)
 cd order-service && mvn spring-boot:run       # :8081
 cd inventory-service && mvn spring-boot:run   # :8082
 cd api-gateway && mvn spring-boot:run         # :8080

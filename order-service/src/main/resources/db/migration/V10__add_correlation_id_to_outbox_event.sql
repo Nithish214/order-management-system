@@ -4,4 +4,4 @@
 -- actually gets published moments later (the normal event-driven path) or minutes later
 -- by the scheduled poller safety net -- either way, OutboxPublisher reads it straight
 -- from this column rather than needing any live thread-local context at publish time.
-ALTER TABLE outbox_event ADD correlation_id VARCHAR2(64 CHAR) NULL;
+ALTER TABLE outbox_event ADD correlation_id VARCHAR(64) NULL;

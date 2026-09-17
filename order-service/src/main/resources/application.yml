@@ -2,18 +2,24 @@ server:
   port: 8081
 
 spring:
+  # Local dev now runs against the postgres container in docker-compose.yml (orderdb --
+  # see docker/postgres-init) instead of the old Oracle XE container. Same defaults
+  # pattern as before: ${DB_USERNAME:postgres} means "use env var DB_USERNAME if set,
+  # else fall back to postgres" -- lets docker-compose.prod.yml override every one of
+  # these via env vars for the real RDS connection without a separate profile file
+  # needing to repeat them.
   datasource:
-    url: jdbc:oracle:thin:@//localhost:1521/XEPDB1
-    username: ${DB_USERNAME:app_user}
-    password: ${DB_PASSWORD:app_password}
-    driver-class-name: oracle.jdbc.OracleDriver
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:orderdb}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
       ddl-auto: validate
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.OracleDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         show_sql: false
     open-in-view: false
