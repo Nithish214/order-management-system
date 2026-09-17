@@ -35,7 +35,28 @@ export function useApiFetch() {
         });
       }
 
-      let response = await attempt(accessToken);
+      // A transport-level failure (a dropped/truncated connection, DNS hiccup, brief
+      // network blip) throws before a response ever comes back -- fetch() surfaces this
+      // as a plain TypeError, distinct from a normal HTTP error response (a 4xx/5xx
+      // still resolves normally, response.ok is just false). That distinction is exactly
+      // what makes a single silent retry safe here: this only fires for "the request
+      // never actually completed," never for "the server answered but said no" -- so it
+      // can't turn one real error into a duplicate side effect, it can only turn one
+      // flaky connection attempt into a second, fresh one before giving up and showing
+      // the user anything.
+      async function attemptWithRetry(token) {
+        try {
+          return await attempt(token);
+        } catch (err) {
+          if (!(err instanceof TypeError)) {
+            throw err;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          return await attempt(token);
+        }
+      }
+
+      let response = await attemptWithRetry(accessToken);
 
       if (response.status === 401) {
         // An access token expiring mid-session is now the *expected* case, not a fatal
@@ -44,7 +65,7 @@ export function useApiFetch() {
         // this is the entire reason the BFF (AuthContext's refreshAccessToken) exists.
         const newToken = await refreshAccessToken();
         if (newToken) {
-          response = await attempt(newToken);
+          response = await attemptWithRetry(newToken);
         }
 
         // Still 401 after a fresh token (or there was no cookie to refresh from at

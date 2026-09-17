@@ -57,6 +57,16 @@ export default function CartSummary() {
       });
 
       if (!response.ok) {
+        // The gateway's rate limiter (protecting order-service/Kafka from being
+        // overwhelmed by a sudden burst -- see api-gateway's application.yml, the
+        // order-service-orders-create route) responds with a plain 429 and no body at
+        // all, unlike every other error response this app produces -- calling
+        // response.json() on that would throw its own confusing "Unexpected end of JSON
+        // input" error instead of a real message. Checked first, specifically, rather
+        // than folded into the generic branch below.
+        if (response.status === 429) {
+          throw new Error("Too many orders are being placed right now. Please wait a moment and try again.");
+        }
         const body = await response.json();
         throw new Error(body.message || "Failed to place order");
       }
