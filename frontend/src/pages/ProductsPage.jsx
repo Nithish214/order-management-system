@@ -29,13 +29,34 @@ export default function ProductsPage() {
   const fileInputRef = useRef(null);
 
   const [products, setProducts] = useState([]);
-  // Keyed by productId -- Inventory Service's own data (GET /stock), fetched alongside
-  // /products but kept as a separate map rather than merged into the product objects,
-  // since the two come from two different services and the same product's price/name
-  // and its live stock level can each change independently.
+  // Keyed by productId -- Inventory Service's own data (GET /stock), fetched
+  // independently of /products (see the two separate effects below) rather than
+  // merged into the product objects, since the two come from two different services
+  // and the same product's price/name and its live stock level can each change
+  // independently -- and, now, since stock doesn't need refetching every time a search
+  // narrows down which products are showing.
   const [stockByProductId, setStockByProductId] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // What's actually in the search box right now, updated on every keystroke.
+  const [searchQuery, setSearchQuery] = useState("");
+  // What the product-fetching effect below actually reacts to -- deliberately NOT the
+  // same state as searchQuery. Debouncing (see the effect that updates this, further
+  // down) means a request only actually fires ~300ms after you stop typing, not on
+  // every single keystroke -- long enough to feel instant, short enough that firing a
+  // network request per letter typed would be wasteful for both this app and the
+  // backend it's calling.
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  // Separate from `loading` on purpose: `loading` gates the full-page "Loading
+  // products..." replacement below, which should only ever happen once, on the very
+  // first load. Every SEARCH after that also needs `setLoading(true)` treatment on the
+  // OLD code below -- but reusing `loading` for that would unmount the entire page
+  // (search box included) on every single keystroke's debounced re-fetch, which would
+  // fight the user trying to keep typing. `searching` drives a much smaller, inline
+  // indicator instead (see the product-list section), leaving the search box and the
+  // rest of the page untouched while a search is in flight.
+  const [searching, setSearching] = useState(false);
+  const isFirstProductLoad = useRef(true);
   // Which product the next file the user picks belongs to -- set the instant they click
   // "Upload image" on a specific row, read back once the shared hidden <input> fires its
   // onChange. uploadingId separately drives the per-row "Uploading..." state.
@@ -52,33 +73,20 @@ export default function ProductsPage() {
   // an empty array means "doesn't depend on anything that changes," so there's nothing
   // that would ever cause it to re-run. Compare this to Phase C's polling version later,
   // where a non-empty array or a repeating interval changes that behavior deliberately.
+  // Stock: fetched exactly once, on mount -- unlike products (below), it never needs
+  // refetching just because a search narrowed down which rows are currently showing.
   useEffect(() => {
     let cancelled = false;
 
-    async function loadProducts() {
+    async function loadStock() {
       try {
-        // Two independent services, fetched together -- Order Service owns the product
-        // catalog, Inventory Service owns live stock. Promise.all so the wait is however
-        // long the slower of the two takes, not both added together in sequence.
-        const [productsResponse, stockResponse] = await Promise.all([
-          apiFetch("/products"),
-          apiFetch("/stock"),
-        ]);
-        // Neither of these was checked before -- harmless as long as every response was
-        // either a real product/stock array or a thrown network error, but the gateway's
-        // circuit breaker (api-gateway's FallbackController) can now return a real,
-        // non-array 503 response instead when a backend is unhealthy. Without this
-        // check, that shape would reach `.map()` below and crash on "not a function"
-        // instead of showing the fallback's own clear message.
-        if (!productsResponse.ok || !stockResponse.ok) {
-          const failed = !productsResponse.ok ? productsResponse : stockResponse;
-          const body = await failed.json().catch(() => ({}));
-          throw new Error(body.message || "Failed to load products");
+        const stockResponse = await apiFetch("/stock");
+        if (!stockResponse.ok) {
+          const body = await stockResponse.json().catch(() => ({}));
+          throw new Error(body.message || "Failed to load stock");
         }
-        const productsData = await productsResponse.json();
         const stockData = await stockResponse.json();
         if (!cancelled) {
-          setProducts(productsData);
           setStockByProductId(
             Object.fromEntries(stockData.map((stock) => [stock.productId, stock.availableQuantity]))
           );
@@ -87,23 +95,84 @@ export default function ProductsPage() {
         if (!cancelled) {
           setError(friendlyErrorMessage(err));
         }
+      }
+    }
+
+    loadStock();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch]);
+
+  // Debounce: only update debouncedQuery (which the effect below actually reacts to)
+  // 300ms after the user stops typing. Every keystroke resets this timer via the
+  // cleanup function -- clearTimeout on the PREVIOUS pending timer before starting a
+  // new one -- so only the very last keystroke in a burst of typing ever actually
+  // survives long enough to fire.
+  useEffect(() => {
+    const timeoutId = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  // Products: re-fetched whenever debouncedQuery changes -- including its initial ""
+  // value on mount, which naturally requests the full catalog (see ProductController's
+  // searchProducts: a blank/missing q returns everything, same shape as plain
+  // GET /products) rather than needing a separate branch here for "no search yet."
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProducts() {
+      // Only the very first load blanks the whole page (see the `if (loading)` early
+      // return below) -- every search after that just flips the small inline
+      // `searching` indicator instead, so the search box itself never disappears or
+      // loses focus while results come back.
+      if (isFirstProductLoad.current) {
+        setLoading(true);
+      } else {
+        setSearching(true);
+      }
+      try {
+        const path = debouncedQuery
+          ? `/products/search?q=${encodeURIComponent(debouncedQuery)}`
+          : "/products";
+        const response = await apiFetch(path);
+        // The gateway's circuit breaker (api-gateway's FallbackController) can return a
+        // real, non-array 503 response when order-service is unhealthy -- without this
+        // check, that shape would reach `.map()` below and crash on "not a function"
+        // instead of showing the fallback's own clear message.
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.message || "Failed to load products");
+        }
+        const data = await response.json();
+        if (!cancelled) {
+          setProducts(data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(friendlyErrorMessage(err));
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
+          setSearching(false);
+          isFirstProductLoad.current = false;
         }
       }
     }
 
     loadProducts();
 
-    // The cleanup function: if this component unmounts before the fetch finishes (e.g.
-    // you navigate away fast), this flips `cancelled` so the late-arriving response
-    // doesn't call setState on a component that's no longer there -- React would warn
-    // about that ("can't update state on an unmounted component") without this guard.
+    // The cleanup function: if this component unmounts, or debouncedQuery changes
+    // again before this fetch finishes (e.g. clearing the search box right after
+    // typing something), this flips `cancelled` so the late-arriving response doesn't
+    // call setState on a stale request -- without it, a slow search response for an
+    // OLDER query could overwrite a newer, already-displayed result.
     return () => {
       cancelled = true;
     };
-  }, [apiFetch]);
+  }, [apiFetch, debouncedQuery]);
 
   // One shared hidden file input for every row, rather than one per product -- a file
   // input has no visual presence of its own anyway, so there's nothing gained by
@@ -181,6 +250,19 @@ export default function ProductsPage() {
       <div className="products-page">
         <h1 className="products-heading">Products</h1>
 
+        {/* Deliberately outside the `loading`/`searching` conditionals -- this input
+            must never unmount or lose focus while a search is in flight, which is the
+            whole reason `searching` exists as a state separate from `loading` (see the
+            product-fetching effect above). */}
+        <input
+          type="search"
+          className="product-search-input"
+          placeholder="Search products..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          aria-label="Search products"
+        />
+
         {error && <p className="text-error page-error">{error}</p>}
 
         {/* Shared by every row -- see handleUploadClick/handleFileSelected. hidden (not a
@@ -196,8 +278,18 @@ export default function ProductsPage() {
 
         <div className="products-layout">
           <section className="product-list">
-            {products.length === 0 && <p className="text-muted">No products available right now.</p>}
-            {products.map((product) => (
+            {/* Genuinely separate messages, not the same text for both cases: an empty
+                catalog and "your search matched nothing" are different situations, and
+                telling a searching user "no products available right now" would
+                incorrectly suggest the whole catalog is empty rather than just their
+                search term. */}
+            {searching && <p className="text-muted">Searching...</p>}
+            {!searching && products.length === 0 && (
+              <p className="text-muted">
+                {debouncedQuery ? `No products match "${debouncedQuery}".` : "No products available right now."}
+              </p>
+            )}
+            {!searching && products.map((product) => (
               <div className="product-row" key={product.id}>
                 <div className="product-row-main">
                   {/* Only the thumbnail + name/sku navigate to the product's own page --

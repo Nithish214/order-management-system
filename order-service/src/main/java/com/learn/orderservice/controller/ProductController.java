@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -64,6 +65,26 @@ public class ProductController {
                 .map(ProductResponse::from)
                 .toList();
         return ResponseEntity.ok(products);
+    }
+
+    // A literal path segment ("/products/search") always wins over a path-variable one
+    // ("/products/{id}") for the same HTTP method, regardless of which is declared first --
+    // standard Spring MVC route matching, not something that depends on this method's
+    // position in the file. Backed by Postgres full-text search (see
+    // V11__add_product_search.sql and ProductRepository.searchByKeyword) -- Postgres/RDS
+    // only, deliberately not implemented for local Oracle dev (see that migration's own
+    // comment for why).
+    //
+    // Blank/missing q returns every product, same shape as plain GET /products -- lets the
+    // frontend use one endpoint for "no search yet" and "actively searching" rather than
+    // switching between two different calls as the user types and clears the search box.
+    @GetMapping("/search")
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<ProductResponse>> searchProducts(@RequestParam(required = false) String q) {
+        List<Product> results = (q == null || q.isBlank())
+                ? productRepository.findAll()
+                : productRepository.searchByKeyword(q);
+        return ResponseEntity.ok(results.stream().map(ProductResponse::from).toList());
     }
 
     @GetMapping("/{id}")
