@@ -20,6 +20,11 @@
 #
 # Safe to re-run: any product whose only image is already a real (non-placehold.co) one
 # is skipped, so a run that gets interrupted partway just picks up where it left off.
+#
+# For a catalog this size, expect Pexels' 200-requests/hour limit to actually bite --
+# Invoke-PexelsWithRetry below backs off and retries on a 429 rather than failing that
+# product outright, so a run may pause for a while (up to 5 minutes per retry) rather
+# than die. If it still gives up on a handful of products, just re-run the script later.
 
 param(
     [Parameter(Mandatory = $true)]
@@ -72,6 +77,43 @@ $failed = @()
 
 $pexelsHeaders = @{ Authorization = $PexelsApiKey }
 
+# Pexels has TWO separate limits: a monthly quota (25000 on the free tier -- nowhere
+# close to a problem for a few hundred products) and a much tighter HOURLY rate limit
+# (200 requests/hour) that a run this size can genuinely burst past, especially once a
+# few products need the category/generic fallback query on top of their name search.
+# Wraps any single Pexels call (search or the actual photo download) -- on a 429,
+# backs off and retries rather than just failing that product outright, since the
+# whole point of a 429 is "you're fine, just not yet."
+function Invoke-PexelsWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][scriptblock]$Action,
+        [int]$MaxAttempts = 5
+    )
+    $backoffSeconds = 60
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            return & $Action
+        } catch {
+            $statusCode = $null
+            if ($_.Exception.Response) {
+                try { $statusCode = [int]$_.Exception.Response.StatusCode } catch {}
+            }
+            if ($statusCode -ne 429 -or $attempt -eq $MaxAttempts) {
+                throw
+            }
+            # Prefer the server's own Retry-After if it sent one; otherwise back off
+            # ourselves, doubling each time (capped at 5 minutes) since we don't know
+            # exactly how much of the hourly window is left.
+            $retryAfter = $null
+            try { $retryAfter = [int]$_.Exception.Response.Headers["Retry-After"] } catch {}
+            $wait = if ($retryAfter) { $retryAfter } else { $backoffSeconds }
+            Write-Host "  Rate limited (429) -- waiting ${wait}s before retry $attempt/$MaxAttempts..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $wait
+            $backoffSeconds = [Math]::Min($backoffSeconds * 2, 300)
+        }
+    }
+}
+
 foreach ($product in $targets) {
     $label = "[$($product.id)] $($product.name)"
     try {
@@ -84,7 +126,7 @@ foreach ($product in $targets) {
         $photo = $null
         foreach ($query in $queries) {
             $searchUrl = "https://api.pexels.com/v1/search?query=$([uri]::EscapeDataString($query))&per_page=1&orientation=square"
-            $result = Invoke-RestMethod -Method Get -Uri $searchUrl -Headers $pexelsHeaders
+            $result = Invoke-PexelsWithRetry { Invoke-RestMethod -Method Get -Uri $searchUrl -Headers $pexelsHeaders }
             if ($result.photos.Count -gt 0) {
                 $photo = $result.photos[0]
                 break
@@ -99,7 +141,7 @@ foreach ($product in $targets) {
         # Invoke-WebRequest builds by default -- without this switch, Windows PowerShell
         # tries to build that DOM via IE's engine and prompts/fails on a machine where
         # IE's first-run hasn't completed.
-        $photoBytes = (Invoke-WebRequest -Uri $photo.src.large -UseBasicParsing).Content
+        $photoBytes = (Invoke-PexelsWithRetry { Invoke-WebRequest -Uri $photo.src.large -UseBasicParsing }).Content
 
         # Step 1: presign -- same call ProductController.createImageUploadUrl serves the
         # browser.
@@ -130,10 +172,10 @@ foreach ($product in $targets) {
         $failed += $label
     }
 
-    # Polite pacing -- also keeps this comfortably inside Pexels' free-tier rate limit
-    # (200 requests/hour), since each product can burn up to 3 search calls (name ->
-    # category -> generic fallback) plus the photo download itself.
-    Start-Sleep -Milliseconds 500
+    # Polite pacing -- reduces how often the run bumps into Pexels' 200-requests/hour
+    # limit in the first place (Invoke-PexelsWithRetry above is what actually recovers
+    # when it happens anyway, for a catalog large enough that pacing alone isn't enough).
+    Start-Sleep -Milliseconds 1000
 }
 
 Write-Host ""
