@@ -61,6 +61,13 @@ export default function ProductsPage() {
   // than translating back and forth -- only the *display* ("Page 1 of 4") adds 1.
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  // "featured" matches ProductController's own default -- the same stable id-ascending
+  // order pagination already needs for correctness (see that controller's comment), not
+  // a separate concept. Only meaningful while browsing/category-filtering: an actual
+  // keyword search always stays ranked by relevance server-side regardless of this value
+  // (see resolveSort's comment), so the dropdown for it is hidden below while
+  // debouncedQuery is set, rather than offering a control that would silently do nothing.
+  const [sort, setSort] = useState("featured");
 
   // Stock: fetched exactly once, on mount -- unlike products (below), it never needs
   // refetching just because a search or category narrows down which rows are showing.
@@ -141,7 +148,7 @@ export default function ProductsPage() {
   // exactly which handler caused it.
   useEffect(() => {
     setPage(0);
-  }, [debouncedQuery, selectedCategory]);
+  }, [debouncedQuery, selectedCategory, sort]);
 
   // Products: re-fetched whenever debouncedQuery, selectedCategory, or page changes. A
   // search takes priority over a category selection when both happen to be set --
@@ -165,7 +172,7 @@ export default function ProductsPage() {
         // 100 matches ProductController's own DEFAULT_PAGE_SIZE -- passed explicitly
         // rather than relying on that default so this stays correct even if the
         // backend's default ever changes independently.
-        const params = new URLSearchParams({ page: String(page), size: "100" });
+        const params = new URLSearchParams({ page: String(page), size: "100", sort });
         let path;
         if (debouncedQuery) {
           params.set("q", debouncedQuery);
@@ -214,7 +221,7 @@ export default function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, debouncedQuery, selectedCategory, page]);
+  }, [apiFetch, debouncedQuery, selectedCategory, page, sort]);
 
   function handleSearchChange(value) {
     setSearchQuery(value);
@@ -254,14 +261,33 @@ export default function ProductsPage() {
             must never unmount or lose focus while a search is in flight, which is the
             whole reason `searching` exists as a state separate from `loading` (see the
             product-fetching effect above). */}
-        <input
-          type="search"
-          className="product-search-input"
-          placeholder="Search products..."
-          value={searchQuery}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          aria-label="Search products"
-        />
+        <div className="products-controls">
+          <input
+            type="search"
+            className="product-search-input"
+            placeholder="Search products..."
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            aria-label="Search products"
+          />
+
+          {/* Hidden during an actual keyword search, not just disabled -- a real search
+              always stays ranked by relevance server-side (see ProductController's
+              buildPageable/resolveSort comments), so showing this control while
+              searching would offer a choice that silently does nothing. */}
+          {!debouncedQuery && (
+            <label className="product-sort-control">
+              Sort by
+              <select value={sort} onChange={(e) => setSort(e.target.value)}>
+                <option value="featured">Featured</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+                <option value="newest">Newest</option>
+                <option value="name_asc">Name: A-Z</option>
+              </select>
+            </label>
+          )}
+        </div>
 
         {error && <p className="text-error page-error">{error}</p>}
 

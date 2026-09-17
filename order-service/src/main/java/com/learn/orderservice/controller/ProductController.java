@@ -80,6 +80,13 @@ public class ProductController {
     // the "an order of magnitude larger" mark that comment named as the point worth
     // revisiting this at. See PagedResponse for the response shape this returns now
     // instead of a plain array.
+    //
+    // Optional ?sort= picks how results are ordered -- "featured" (the default) is the
+    // same stable id-ascending order pagination already needed for correctness (see
+    // buildPageable/resolveSort below); everything else is the common e-commerce set
+    // given the data this catalog actually has (price, id as a proxy for "when it was
+    // added", name) -- no ratings/sales data exists to support something like "Best
+    // Sellers".
     @GetMapping
     // @Transactional here (and on getProduct below) now that ProductResponse.from() reads
     // product.getImages() -- that's a LAZY collection, so without an open session at the
@@ -90,9 +97,10 @@ public class ProductController {
     public ResponseEntity<PagedResponse<ProductResponse>> getAllProducts(
             @RequestParam(required = false) String category,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
+            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
+            @RequestParam(defaultValue = "featured") String sort
     ) {
-        Pageable pageable = buildPageable(page, size);
+        Pageable pageable = buildPageable(page, size, sort);
         Page<Product> results = (category == null || category.isBlank())
                 ? productRepository.findAll(pageable)
                 : productRepository.findByCategory(category, pageable);
@@ -106,20 +114,43 @@ public class ProductController {
         return Math.max(1, Math.min(size, MAX_PAGE_SIZE));
     }
 
+    // Whitelist mapping from the ?sort= string to an actual Sort -- never builds one
+    // from raw client input directly (that would let a caller sort/inject on arbitrary
+    // column names), and falls back to the same "featured" order for anything it doesn't
+    // recognize rather than erroring, so an old bookmarked URL or a typo just gets the
+    // default instead of a 400.
+    //
+    // id ascending IS "featured" here: this catalog has no actual merchandising/curation
+    // concept (no "featured" flag on Product), so insertion order is what stands in for
+    // it -- same default LIMIT/OFFSET pagination already needed anyway for the reason
+    // explained below.
+    private static Sort resolveSort(String sort) {
+        return switch (sort) {
+            case "price_asc" -> Sort.by("unitPrice").ascending();
+            case "price_desc" -> Sort.by("unitPrice").descending();
+            case "newest" -> Sort.by("id").descending();
+            case "name_asc" -> Sort.by("name").ascending();
+            default -> Sort.by("id").ascending();
+        };
+    }
+
     // A LIMIT/OFFSET query with no ORDER BY has no guaranteed row order at all -- Postgres
     // is free to return rows in whatever order it finds convenient (physical scan order
     // today, but nothing stops that changing after an UPDATE, a VACUUM, or on a replica).
-    // Without this, two different page requests aren't guaranteed to agree on what's "row
-    // 101" versus "row 200" -- a product could silently appear on two pages, or on
-    // neither, purely because the underlying scan order shifted between requests. Sort by
-    // id ascending makes every page's boundary well-defined and stable.
+    // Without SOME explicit order, two different page requests aren't guaranteed to agree
+    // on what's "row 101" versus "row 200" -- a product could silently appear on two
+    // pages, or on neither, purely because the underlying scan order shifted between
+    // requests. Whichever Sort resolveSort() picks makes every page's boundary
+    // well-defined and stable, not just the id-ascending default.
     //
-    // Only actually takes effect on findAll/findByCategory below -- Spring Data doesn't
-    // auto-apply a Pageable's Sort to a native @Query like searchByPrefixTsQuery (only
-    // its LIMIT/OFFSET), which already has its own explicit, more meaningful order
-    // (ts_rank DESC) baked into the SQL itself anyway.
-    private static Pageable buildPageable(int page, int size) {
-        return PageRequest.of(page, clampPageSize(size), Sort.by("id").ascending());
+    // NEVER pass a Pageable built by this to searchByPrefixTsQuery -- see that method's
+    // call site for why a Sorted Pageable there is an outright 500, not just a no-op.
+    // Safe everywhere else (findAll/findByCategory), which is exactly where a caller's
+    // ?sort= actually needs to take effect. That's also why the frontend hides the sort
+    // dropdown while an actual search is active -- there's genuinely nowhere for it to
+    // safely apply once a keyword match is in play.
+    private static Pageable buildPageable(int page, int size, String sort) {
+        return PageRequest.of(page, clampPageSize(size), resolveSort(sort));
     }
 
     // Backs the sidebar/nav -- one row per category, with how many products are actually
@@ -144,19 +175,31 @@ public class ProductController {
     // Blank/missing q returns every product, same shape as plain GET /products -- lets the
     // frontend use one endpoint for "no search yet" and "actively searching" rather than
     // switching between two different calls as the user types and clears the search box.
-    // Paginated the same way GET /products now is -- see that method's comment.
+    // Paginated the same way GET /products now is -- see that method's comment. sort is
+    // only accepted here for the blank-q fallback (which is just findAll under the hood,
+    // same as plain GET /products) -- an actual keyword match always stays ranked by
+    // relevance regardless of what sort asks for.
+    //
+    // Found the hard way (a live 500, not just reasoning about it) that a Sorted Pageable
+    // can NOT be passed to searchByPrefixTsQuery: Spring Data doesn't skip sorting a
+    // native @Query just because the SQL already has its own ORDER BY -- it appends the
+    // Pageable's Sort as a SECOND "order by" clause regardless, which Postgres rejects
+    // outright ("syntax error at or near 'order'"). So the ranked branch below
+    // deliberately builds its OWN plain, unsorted Pageable rather than reusing `pageable`
+    // -- the native query's baked-in ORDER BY ts_rank DESC is the only sort that's safe
+    // to combine with it.
     @GetMapping("/search")
     @Transactional(readOnly = true)
     public ResponseEntity<PagedResponse<ProductResponse>> searchProducts(
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
+            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
+            @RequestParam(defaultValue = "featured") String sort
     ) {
-        Pageable pageable = buildPageable(page, size);
         String prefixQuery = toPrefixTsQuery(q);
         Page<Product> results = prefixQuery.isEmpty()
-                ? productRepository.findAll(pageable)
-                : productRepository.searchByPrefixTsQuery(prefixQuery, pageable);
+                ? productRepository.findAll(buildPageable(page, size, sort))
+                : productRepository.searchByPrefixTsQuery(prefixQuery, PageRequest.of(page, clampPageSize(size)));
         return ResponseEntity.ok(PagedResponse.from(results.map(ProductResponse::from)));
     }
 
