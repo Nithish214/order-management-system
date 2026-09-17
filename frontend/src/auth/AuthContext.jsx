@@ -30,7 +30,29 @@ export function AuthProvider({ children }) {
   // along with this request automatically (see bffRefresh's credentials: "include") --
   // there's a real, still-valid session to recover here that simply wasn't visible to
   // any JavaScript, this component included, before the BFF existed.
+  //
+  // Skipped entirely on /login and /signup -- the two pages that exist specifically for
+  // a logged-out visitor. Neither page redirects an already-authenticated visitor
+  // anywhere else, so restoring a session while sitting on either one had no actual
+  // effect for the user, just an entirely expected 401 in the console on every single
+  // visit (no session cookie exists for someone who's there to log in). A plain
+  // window.location check, not react-router's useLocation -- this only needs to look at
+  // wherever the very first page load landed, and AuthProvider itself is mounted once
+  // for the whole app's lifetime, not per-route, so a hook that re-renders on
+  // client-side navigation wouldn't change when this effect actually runs anyway.
+  //
+  // Tradeoff worth knowing: someone who already has a valid session but opens /login
+  // directly (an old bookmark, a stale tab) won't get silently logged in anymore --
+  // they'll see the login form and need to log in again, rather than the previous
+  // behavior of quietly restoring their session even there. Since this app doesn't
+  // treat "authenticated" as retroactive that visit only lasts until they either log in
+  // again or reload on a different page.
   useEffect(() => {
+    const path = window.location.pathname;
+    if (path === "/login" || path === "/signup") {
+      setIsBootstrapping(false);
+      return;
+    }
     bffRefresh()
       .then((result) => {
         if (result) setAccessToken(result.accessToken);
