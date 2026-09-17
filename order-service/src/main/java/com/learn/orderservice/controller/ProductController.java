@@ -16,6 +16,7 @@ import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -91,7 +92,7 @@ public class ProductController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
     ) {
-        Pageable pageable = PageRequest.of(page, clampPageSize(size));
+        Pageable pageable = buildPageable(page, size);
         Page<Product> results = (category == null || category.isBlank())
                 ? productRepository.findAll(pageable)
                 : productRepository.findByCategory(category, pageable);
@@ -103,6 +104,22 @@ public class ProductController {
     // which would throw its own (less clear) exception for a negative/zero size anyway.
     private static int clampPageSize(int size) {
         return Math.max(1, Math.min(size, MAX_PAGE_SIZE));
+    }
+
+    // A LIMIT/OFFSET query with no ORDER BY has no guaranteed row order at all -- Postgres
+    // is free to return rows in whatever order it finds convenient (physical scan order
+    // today, but nothing stops that changing after an UPDATE, a VACUUM, or on a replica).
+    // Without this, two different page requests aren't guaranteed to agree on what's "row
+    // 101" versus "row 200" -- a product could silently appear on two pages, or on
+    // neither, purely because the underlying scan order shifted between requests. Sort by
+    // id ascending makes every page's boundary well-defined and stable.
+    //
+    // Only actually takes effect on findAll/findByCategory below -- Spring Data doesn't
+    // auto-apply a Pageable's Sort to a native @Query like searchByPrefixTsQuery (only
+    // its LIMIT/OFFSET), which already has its own explicit, more meaningful order
+    // (ts_rank DESC) baked into the SQL itself anyway.
+    private static Pageable buildPageable(int page, int size) {
+        return PageRequest.of(page, clampPageSize(size), Sort.by("id").ascending());
     }
 
     // Backs the sidebar/nav -- one row per category, with how many products are actually
@@ -135,7 +152,7 @@ public class ProductController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
     ) {
-        Pageable pageable = PageRequest.of(page, clampPageSize(size));
+        Pageable pageable = buildPageable(page, size);
         String prefixQuery = toPrefixTsQuery(q);
         Page<Product> results = prefixQuery.isEmpty()
                 ? productRepository.findAll(pageable)
