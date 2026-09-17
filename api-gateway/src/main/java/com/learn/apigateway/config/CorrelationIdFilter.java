@@ -21,9 +21,29 @@ import java.util.UUID;
 // it on their outbox_event rows so it survives the async gap between "HTTP request wrote
 // this row" and "some other thread/the scheduled poller actually published it to Kafka".
 //
-// Same GlobalFilter/Ordered shape as UserIdentityHeaderFilter -- see that class for why
-// this pattern (mutate the request, pass the mutated exchange down the chain) is how
-// Spring Cloud Gateway's reactive filter chain adds a header before proxying downstream.
+// POST-INCIDENT FIX (2026-09-17): the first version of this filter caused a real, live
+// bug -- some responses were arriving at the browser cut off mid-stream
+// (net::ERR_INCOMPLETE_CHUNKED_ENCODING), confirmed by disabling this exact filter and
+// watching the symptom disappear entirely. Two things were wrong, both fixed below:
+//
+//   1. getOrder() returned -1, the EXACT SAME value as the pre-existing
+//      UserIdentityHeaderFilter -- an accidental tie, not a deliberate choice. Two
+//      Spring Cloud Gateway GlobalFilters sharing one order value have no guaranteed
+//      relative execution order; which one actually ran first was left to chance
+//      (bean registration order), not something either filter's code could rely on.
+//
+//   2. The original response header was added immediately/eagerly
+//      (exchange.getResponse().getHeaders().add(...)), before chain.filter() even ran --
+//      racing against however the gateway's own downstream routing filter (which
+//      actually streams the backend's response back) manages that same response object.
+//      Most of the time this composed fine; under the specific request pattern a real
+//      browser produces (several requests fired in quick succession right after a page
+//      load), it didn't.
+//
+// The fix: an explicit order distinct from UserIdentityHeaderFilter's, and using
+// beforeCommit() -- WebFlux's own purpose-built hook for "run this right before the
+// response is actually sent, no matter what else is happening to it" -- instead of an
+// eager, racy mutation.
 @Component
 public class CorrelationIdFilter implements GlobalFilter, Ordered {
 
@@ -39,24 +59,35 @@ public class CorrelationIdFilter implements GlobalFilter, Ordered {
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
+        // Effectively-final copy for use inside the lambda below -- correlationId itself
+        // gets reassigned above, which the beforeCommit callback (a separate closure,
+        // possibly invoked well after this method returns) can't capture directly.
+        final String finalCorrelationId = correlationId;
 
         ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                .header(CORRELATION_ID_HEADER, correlationId)
+                .header(CORRELATION_ID_HEADER, finalCorrelationId)
                 .build();
 
         // Echoed back on the response too -- lets a caller (or whoever's looking at
         // browser DevTools) see exactly which id to go grep for in the logs, without
-        // needing access to the request they just made.
-        exchange.getResponse().getHeaders().add(CORRELATION_ID_HEADER, correlationId);
+        // needing access to the request they just made. beforeCommit's callback is
+        // guaranteed by WebFlux to run exactly once, right before the response headers
+        // actually get flushed to the client -- not "probably early enough," a real
+        // guarantee, which is what an eager .add() call never had.
+        exchange.getResponse().beforeCommit(() -> {
+            exchange.getResponse().getHeaders().add(CORRELATION_ID_HEADER, finalCorrelationId);
+            return Mono.empty();
+        });
 
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
     }
 
     @Override
     public int getOrder() {
-        // Same reasoning as UserIdentityHeaderFilter: must run before the routing filter
-        // that actually proxies downstream (Ordered.LOWEST_PRECEDENCE). No ordering
-        // dependency between the two of them, since each only adds its own header.
-        return -1;
+        // Deliberately one step before UserIdentityHeaderFilter's -1, not an accidental
+        // tie with it -- this filter doesn't depend on authentication state at all, so
+        // there's no reason for its relative position to be left to chance the way it
+        // was before.
+        return -2;
     }
 }
