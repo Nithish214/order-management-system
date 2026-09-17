@@ -8,8 +8,13 @@ spring:
   # else fall back to postgres" -- lets docker-compose.prod.yml override every one of
   # these via env vars for the real RDS connection without a separate profile file
   # needing to repeat them.
+  #
+  # Port defaults to 5433, not Postgres's usual 5432 -- see docker-compose.yml's postgres
+  # service comment: that's the HOST port it publishes on, specifically to avoid
+  # colliding with a native Postgres install that might already own 5432 on this
+  # machine. The container's own internal port is still the normal 5432.
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:orderdb}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:orderdb}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver

@@ -15,8 +15,15 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: order-postgres
+    # 5433 on the HOST, not 5432 -- found by actually testing this end to end: a native
+    # Windows PostgreSQL service can already own host port 5432 (installed for some
+    # other, unrelated project), and Docker's port mapping doesn't reliably win that
+    # contest. The container's own internal port is untouched (still 5432, the default
+    # every Postgres client/driver expects), so nothing inside Docker needs to know
+    # about this -- only the host-side connection (application.yml's DB_PORT default
+    # below) needs to target 5433 instead.
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
