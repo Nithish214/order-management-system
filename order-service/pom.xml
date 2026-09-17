@@ -85,7 +85,7 @@
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
-        <!-- Postgres everywhere now -- local dev used to run against an Oracle XE
+        <!-- Postgres everywhere now: local dev used to run against an Oracle XE
              container (see git history if you ever need the old dual-dialect setup back),
              but that's gone; this is the only DB driver this service needs, same as
              payment-service, which was Postgres-only from day one. -->
