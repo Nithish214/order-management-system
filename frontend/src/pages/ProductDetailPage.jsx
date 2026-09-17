@@ -57,12 +57,18 @@ export default function ProductDetailPage() {
         const data = await response.json();
         if (!cancelled) setProduct(data);
 
-        apiFetch(`/stock/${id}`)
-          .then((stockResponse) => (stockResponse.ok ? stockResponse.json() : null))
-          .then((stockData) => {
-            if (!cancelled && stockData) setStockQuantity(stockData.availableQuantity);
-          })
-          .catch(() => {});
+        // Stock levels are admin-only information now -- a regular shopper never sees
+        // them (see StockCount's render below), so there's no reason to even fetch them
+        // for anyone else. Admins still need this, both to see the current count and
+        // because handleRestock below updates it after a restock.
+        if (isAdmin) {
+          apiFetch(`/stock/${id}`)
+            .then((stockResponse) => (stockResponse.ok ? stockResponse.json() : null))
+            .then((stockData) => {
+              if (!cancelled && stockData) setStockQuantity(stockData.availableQuantity);
+            })
+            .catch(() => {});
+        }
       } catch (err) {
         if (!cancelled) setError(friendlyErrorMessage(err));
       } finally {
@@ -74,7 +80,7 @@ export default function ProductDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, apiFetch]);
+  }, [id, apiFetch, isAdmin]);
 
   function handleAddToCart() {
     cart.addItem(product, quantity);
@@ -233,9 +239,17 @@ export default function ProductDetailPage() {
           <p className="detail-sku text-muted">{product.sku}</p>
           <h1 className="detail-name">{product.name}</h1>
           <p className="detail-price">${product.unitPrice.toFixed(2)}</p>
-          <p className="detail-stock">
-            <StockCount quantity={stockQuantity} />
-          </p>
+          {/* Admin-only -- a regular shopper never sees stock levels at all now, "Out of
+              stock" included. A shopper CAN still add an out-of-stock item to their cart
+              with no warning here; the actual order still gets rejected at checkout
+              time regardless (StockController's reservation logic doesn't trust what
+              this page shows either way), so nothing is unsafe, just less proactively
+              informative than before for that one case. */}
+          {isAdmin && (
+            <p className="detail-stock">
+              <StockCount quantity={stockQuantity} />
+            </p>
+          )}
 
           {error && <p className="text-error page-error">{error}</p>}
 

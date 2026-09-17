@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
+import { useAuth } from "../auth/AuthContext";
 import { useCart } from "../cart/CartContext";
 import CartSummary from "../cart/CartSummary";
 import { friendlyErrorMessage } from "../utils/errors";
@@ -18,6 +19,7 @@ import "./ProductsPage.css";
 export default function ProductsPage() {
   const apiFetch = useApiFetch();
   const cart = useCart();
+  const { isAdmin } = useAuth();
 
   const [products, setProducts] = useState([]);
   // Keyed by productId -- Inventory Service's own data (GET /stock), fetched
@@ -71,7 +73,15 @@ export default function ProductsPage() {
 
   // Stock: fetched exactly once, on mount -- unlike products (below), it never needs
   // refetching just because a search or category narrows down which rows are showing.
+  // Admin-only now (see StockCount's render further down): a regular shopper never sees
+  // stock levels at all, so there's nothing for this effect to do for them -- skipping
+  // the fetch entirely, not just hiding the result, avoids an unused network request on
+  // every single page load for the vast majority of visitors.
   useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadStock() {
@@ -99,7 +109,7 @@ export default function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiFetch]);
+  }, [apiFetch, isAdmin]);
 
   // Categories: also fetched exactly once, on mount -- the sidebar's list doesn't change
   // based on what's currently selected or searched for.
@@ -357,7 +367,12 @@ export default function ProductsPage() {
                       <p className="product-card-name">{product.name}</p>
                       <p className="product-card-price">${product.unitPrice.toFixed(2)}</p>
                     </Link>
-                    <StockCount quantity={stockByProductId[product.id]} />
+                    {/* Admin-only -- a regular shopper never sees stock levels, "Out of
+                        stock" included. Adding an out-of-stock item to the cart still
+                        works with no warning here; the order itself is still rejected
+                        at checkout regardless (StockController's reservation logic
+                        doesn't trust what this card shows either way). */}
+                    {isAdmin && <StockCount quantity={stockByProductId[product.id]} />}
                     <button
                       type="button"
                       className="btn-secondary product-card-add"
