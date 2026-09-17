@@ -60,8 +60,19 @@ $accessToken = $loginResponse.accessToken
 $authHeaders = @{ Authorization = "Bearer $accessToken" }
 Write-Host "Logged in."
 
+# GET /products now returns { content, page, size, totalElements, totalPages } instead
+# of a bare array (see ProductController/PagedResponse -- pagination added once the
+# catalog grew past a few hundred products), capped at 200 per page server-side. Pages
+# through every page and concatenates .content -- this script genuinely needs the WHOLE
+# catalog to find every placeholder-needing product, not just the first page's worth.
 Write-Host "Fetching product catalog..."
-$products = Invoke-RestMethod -Method Get -Uri "$GatewayUrl/products" -Headers $authHeaders
+$products = @()
+$currentPage = 0
+do {
+    $pageResponse = Invoke-RestMethod -Method Get -Uri "$GatewayUrl/products?page=$currentPage&size=200" -Headers $authHeaders
+    $products += $pageResponse.content
+    $currentPage++
+} while ($currentPage -lt $pageResponse.totalPages)
 Write-Host "Loaded $($products.Count) products."
 
 # A product only needs a real photo if every image it currently has is a placehold.co
