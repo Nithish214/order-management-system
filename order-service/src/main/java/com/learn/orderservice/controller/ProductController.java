@@ -1,6 +1,7 @@
 package com.learn.orderservice.controller;
 
 import com.learn.orderservice.dto.AddProductImageRequest;
+import com.learn.orderservice.dto.CategoryResponse;
 import com.learn.orderservice.dto.ImageUploadUrlRequest;
 import com.learn.orderservice.dto.ImageUploadUrlResponse;
 import com.learn.orderservice.dto.ProductResponse;
@@ -54,6 +55,17 @@ public class ProductController {
         this.productImageUploadService = productImageUploadService;
     }
 
+    // Optional ?category= filters to one category; omitted (or blank) returns everything,
+    // same as before this parameter existed -- an existing caller with no idea this filter
+    // now exists keeps working exactly as it always did.
+    //
+    // No pagination, deliberately, even now that this can return up to 50-ish rows: a
+    // ~50-item JSON response is a few tens of KB at most, trivial for a browser to receive
+    // and render as one CSS grid -- nowhere near the scale (typically many hundreds to
+    // thousands of rows) where pagination actually starts paying for its own complexity
+    // (page/size params, a total-count/has-more field, frontend pagination controls or
+    // infinite scroll). Worth revisiting if this catalog grows an order of magnitude
+    // larger; not worth building ahead of that need today.
     @GetMapping
     // @Transactional here (and on getProduct below) now that ProductResponse.from() reads
     // product.getImages() -- that's a LAZY collection, so without an open session at the
@@ -61,21 +73,31 @@ public class ProductController {
     // silently fetching it. readOnly = true: these never write, which lets Hibernate skip
     // its usual dirty-checking work for the transaction.
     @Transactional(readOnly = true)
-    public ResponseEntity<List<ProductResponse>> getAllProducts() {
-        List<ProductResponse> products = productRepository.findAll()
-                .stream()
-                .map(ProductResponse::from)
-                .toList();
-        return ResponseEntity.ok(products);
+    public ResponseEntity<List<ProductResponse>> getAllProducts(@RequestParam(required = false) String category) {
+        List<Product> results = (category == null || category.isBlank())
+                ? productRepository.findAll()
+                : productRepository.findByCategory(category);
+        return ResponseEntity.ok(results.stream().map(ProductResponse::from).toList());
+    }
+
+    // Backs the sidebar/nav -- one row per category, with how many products are actually
+    // in it, so the frontend can render "Electronics (13)" without a separate request (or
+    // client-side counting) per category. A literal path segment, same reasoning as
+    // /search above it in this file -- always wins over /{id} for the same HTTP method
+    // regardless of declaration order.
+    @GetMapping("/categories")
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<CategoryResponse>> getCategories() {
+        return ResponseEntity.ok(productRepository.findCategorySummaries());
     }
 
     // A literal path segment ("/products/search") always wins over a path-variable one
     // ("/products/{id}") for the same HTTP method, regardless of which is declared first --
     // standard Spring MVC route matching, not something that depends on this method's
     // position in the file. Backed by Postgres full-text search (see
-    // V11__add_product_search.sql and ProductRepository.searchByPrefixTsQuery) --
-    // Postgres/RDS only, deliberately not implemented for local Oracle dev (see that
-    // migration's own comment for why).
+    // V11__add_product_search.sql and ProductRepository.searchByPrefixTsQuery) -- used to
+    // be Postgres/RDS only, since local dev ran against Oracle and never got the
+    // equivalent migration; now that local dev runs Postgres too, this works everywhere.
     //
     // Blank/missing q returns every product, same shape as plain GET /products -- lets the
     // frontend use one endpoint for "no search yet" and "actively searching" rather than

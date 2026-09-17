@@ -1,5 +1,6 @@
 package com.learn.orderservice.repository;
 
+import com.learn.orderservice.dto.CategoryResponse;
 import com.learn.orderservice.entity.Product;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -8,6 +9,20 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
+
+    // A plain derived query method -- Spring Data generates the "WHERE category = ?"
+    // implementation itself from the method name alone, no @Query needed for something
+    // this simple (unlike the full-text search below, which genuinely needs raw SQL).
+    List<Product> findByCategory(String category);
+
+    // JPQL's `new` constructor-expression syntax -- builds a CategoryResponse directly
+    // from the aggregated query results, rather than fetching plain Object[] rows (JPA's
+    // usual fallback for a query the entity itself doesn't shape) and mapping them by hand
+    // in the controller. ORDER BY category, not by count -- alphabetical is what a
+    // sidebar/nav actually wants, not "biggest category first."
+    @Query("SELECT new com.learn.orderservice.dto.CategoryResponse(p.category, COUNT(p)) "
+            + "FROM Product p GROUP BY p.category ORDER BY p.category")
+    List<CategoryResponse> findCategorySummaries();
 
     // Native SQL, not a derived query method or JPQL -- @@ (the tsvector "matches" operator)
     // and ts_rank() are Postgres-specific full-text search functions with no JPQL

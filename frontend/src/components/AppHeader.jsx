@@ -20,7 +20,10 @@ export default function AppHeader() {
       <nav className="app-header-nav">
         <Link to="/">Products</Link>
         <Link to="/orders">Order history</Link>
-        <Link to="/cart">Cart{itemCount > 0 ? ` (${itemCount})` : ""}</Link>
+        <Link to="/cart" className="app-header-cart-link">
+          Cart
+          {itemCount > 0 && <span className="app-header-cart-badge">{itemCount}</span>}
+        </Link>
         {isAdmin && <span className="app-header-admin-badge">Admin</span>}
         <button onClick={logout} className="btn-secondary">
           Log out

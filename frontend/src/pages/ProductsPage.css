@@ -1,12 +1,10 @@
-/* Products: a plain list with row dividers, not a repeating bordered/shadowed card per
-   product -- that would be exactly the "rounded-card-kit sameness" the design direction
-   warns against for something this simple. The cart gets the one deliberate exception: a
-   single bordered panel, because it functionally IS a distinct block on this page (running
-   total, checkout action) -- restraint means giving the treatment to the one thing that's
-   actually different, not to everything, and not to nothing either. */
+/* Amazon-style LAYOUT PATTERN (nav + category sidebar + product grid + filtering) --
+   deliberately not Amazon's actual visual style. Every color/spacing/type value below
+   still comes from this project's own design tokens (tokens.css), not an orange/black
+   palette copied from anywhere else. */
 
 .products-page {
-  max-width: 960px;
+  max-width: 1200px;
   margin: var(--space-5) auto 0;
   padding: 0 var(--space-3) var(--space-6);
 }
@@ -48,61 +46,106 @@
   flex-wrap: wrap;
 }
 
-/* ---- Product list ---- */
+/* ---- Category sidebar ---- */
 
-.product-list {
-  flex: 2 1 480px;
+.category-sidebar {
+  flex: 0 0 180px;
+  min-width: 160px;
+}
+
+.category-sidebar-heading {
+  font-size: var(--text-sm-size);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.category-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.category-link {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) 0;
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--text-sm-size);
+  color: var(--color-text);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.category-link:hover {
+  text-decoration: underline;
+}
+
+/* The one accent-color moment on this page -- everywhere else stays neutral/muted, so
+   the single selected category actually stands out instead of competing with a page
+   full of equally-colored elements. */
+.category-link-active {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ---- Product grid ---- */
+
+.product-grid-section {
+  flex: 3 1 480px;
   min-width: 280px;
 }
 
-.product-row {
-  padding: var(--space-3) 0;
-  border-bottom: var(--border-width) solid var(--color-border);
+/* auto-fill + minmax, not a fixed column count -- the number of columns adapts to
+   however wide this section actually is (which itself changes as the sidebar/cart
+   columns wrap on narrower screens, see the media query below), rather than a hardcoded
+   "3 columns" that would either cramp on a narrow screen or leave awkward empty space
+   on a wide one. */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-4);
 }
 
-.product-row:first-child {
-  border-top: var(--border-width) solid var(--color-border);
-}
-
-.product-row-main {
+.product-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
 }
 
-/* Wraps just the thumbnail + name/sku -- the part of the row that navigates to the
-   product's own page. A plain <a> would default to link-blue and underline everywhere;
-   this resets that so it reads as "part of the row," with the underline appearing only
-   on hover, on the name specifically, as the one hint that it's clickable. */
-.product-row-link {
+.product-card-link {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
   color: inherit;
   text-decoration: none;
 }
 
-.product-row-link:hover .product-name {
+.product-card-link:hover .product-card-name {
   text-decoration: underline;
 }
 
-/* A fixed-size square, bordered like every other small control on this page -- not
-   rounded into a "product card" avatar, just a quiet thumbnail sitting in a list row. */
-.product-thumb {
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
+.product-card-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-control);
   overflow: hidden;
   background: var(--color-bg);
+  margin-bottom: var(--space-1);
 }
 
-.product-thumb img {
+.product-card-thumb img {
   display: block;
   width: 100%;
   height: 100%;
@@ -116,37 +159,27 @@
   background: var(--color-border);
 }
 
-/* Indented to align under the name/sku text, past the thumbnail -- admin-only, so this
-   entire block simply doesn't render for anyone else (see ProductsPage.jsx's isAdmin
-   check), not just hidden with CSS. */
-.product-row-admin {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: var(--space-2) 0 0 calc(48px + var(--space-3));
+.product-card-name {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm-size);
+  /* Long product names (several of the 50-product catalog's book/fashion titles run
+     long) get clamped to 2 lines with an ellipsis rather than stretching some cards
+     taller than their neighbors in the same grid row. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* .restock-control itself moved to styles/restock-control.css (global) once the product
-   detail page needed the identical control too. */
-
-.product-info {
-  min-width: 0;
-}
-
-.product-name {
+.product-card-price {
   margin: 0;
   font-weight: var(--font-weight-semibold);
 }
 
-.product-sku {
-  margin: var(--space-1) 0 0;
-}
-
-.product-price {
-  margin: 0 var(--space-4) 0 auto;
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
+.product-card-add {
+  margin-top: auto;
+  align-self: flex-start;
 }
 
 /* ---- Cart sidebar -- just sizing for where <CartSummary /> sits on THIS page. Its own
@@ -156,12 +189,32 @@
    drawing a border/padding box around another border/padding box. ---- */
 
 .cart-sidebar {
-  flex: 1 1 280px;
-  min-width: 260px;
+  flex: 1 1 260px;
+  min-width: 240px;
 }
 
 @media (max-width: 640px) {
   .products-layout {
     flex-direction: column;
+  }
+
+  /* The sidebar becomes a horizontal, scrollable bar above the grid on narrow screens --
+     a permanent left column doesn't work once there's no room beside the grid for it,
+     but the category list itself is the same <ul> either way, not a second
+     implementation to keep in sync with this one. */
+  .category-sidebar {
+    width: 100%;
+  }
+
+  .category-list {
+    flex-direction: row;
+    gap: var(--space-3);
+    overflow-x: auto;
+    padding-bottom: var(--space-1);
+  }
+
+  .category-link {
+    white-space: nowrap;
+    width: auto;
   }
 }

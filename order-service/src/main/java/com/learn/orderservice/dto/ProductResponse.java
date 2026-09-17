@@ -15,6 +15,7 @@ public class ProductResponse {
     private String sku;
     private String name;
     private BigDecimal unitPrice;
+    private String category;
     // Empty for any product without an uploaded image yet -- the frontend shows a plain
     // placeholder in that case rather than a broken image icon. Ordered oldest-first, so
     // images.get(0) (when present) is this product's cover/thumbnail image everywhere a
@@ -27,6 +28,7 @@ public class ProductResponse {
         response.setSku(product.getSku());
         response.setName(product.getName());
         response.setUnitPrice(product.getUnitPrice());
+        response.setCategory(product.getCategory());
         response.setImages(product.getImages().stream().map(ProductImageResponse::from).toList());
         return response;
     }
