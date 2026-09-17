@@ -236,7 +236,11 @@ export default function ProductDetailPage() {
         </div>
 
         <div className="detail-info">
-          <p className="detail-sku text-muted">{product.sku}</p>
+          {/* Admin-only, same reasoning and same pattern as stock levels just below --
+              a SKU is internal catalog/inventory bookkeeping (also just an unadorned
+              alphanumeric code, nothing meaningful to a shopper), not something a
+              regular customer needs to see. */}
+          {isAdmin && <p className="detail-sku text-muted">{product.sku}</p>}
           <h1 className="detail-name">{product.name}</h1>
           <p className="detail-price">${product.unitPrice.toFixed(2)}</p>
           {/* Admin-only -- a regular shopper never sees stock levels at all now, "Out of
