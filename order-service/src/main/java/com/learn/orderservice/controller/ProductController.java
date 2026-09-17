@@ -23,7 +23,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 // Read-only lookup so a client (Postman/Swagger, no frontend yet) can discover valid
 // productIds and prices before calling POST /orders. Stock is no longer tracked here at
@@ -71,9 +73,9 @@ public class ProductController {
     // ("/products/{id}") for the same HTTP method, regardless of which is declared first --
     // standard Spring MVC route matching, not something that depends on this method's
     // position in the file. Backed by Postgres full-text search (see
-    // V11__add_product_search.sql and ProductRepository.searchByKeyword) -- Postgres/RDS
-    // only, deliberately not implemented for local Oracle dev (see that migration's own
-    // comment for why).
+    // V11__add_product_search.sql and ProductRepository.searchByPrefixTsQuery) --
+    // Postgres/RDS only, deliberately not implemented for local Oracle dev (see that
+    // migration's own comment for why).
     //
     // Blank/missing q returns every product, same shape as plain GET /products -- lets the
     // frontend use one endpoint for "no search yet" and "actively searching" rather than
@@ -81,10 +83,35 @@ public class ProductController {
     @GetMapping("/search")
     @Transactional(readOnly = true)
     public ResponseEntity<List<ProductResponse>> searchProducts(@RequestParam(required = false) String q) {
-        List<Product> results = (q == null || q.isBlank())
+        String prefixQuery = toPrefixTsQuery(q);
+        List<Product> results = prefixQuery.isEmpty()
                 ? productRepository.findAll()
-                : productRepository.searchByKeyword(q);
+                : productRepository.searchByPrefixTsQuery(prefixQuery);
         return ResponseEntity.ok(results.stream().map(ProductResponse::from).toList());
+    }
+
+    // Turns raw user input ("web cam") into a Postgres tsquery string ("web:* & cam:*")
+    // that does PREFIX matching on every word, not just whole-word matching after stemming
+    // -- found live that searching "web" never matched "Webcam" without this, since
+    // stemming (what plainto_tsquery/a plain to_tsquery without `:*` would do) only relates
+    // words that are grammatical variants of each other, and "web" isn't a shorter
+    // inflection of "webcam", just a different word that happens to share a prefix.
+    //
+    // Each token is stripped down to letters/digits before the `:*` suffix is appended --
+    // not an XSS/SQL-injection concern (this string is still bound as a query PARAMETER,
+    // never concatenated into SQL), but tsquery has its OWN small operator language
+    // (`&`, `|`, `!`, `(`, `)`, `:`) that a raw search term containing those characters
+    // would otherwise be parsed as, throwing a Postgres syntax error instead of just
+    // treating them as plain text to search for.
+    private static String toPrefixTsQuery(String rawQuery) {
+        if (rawQuery == null || rawQuery.isBlank()) {
+            return "";
+        }
+        return Arrays.stream(rawQuery.trim().split("\\s+"))
+                .map(token -> token.replaceAll("[^a-zA-Z0-9]", ""))
+                .filter(token -> !token.isEmpty())
+                .map(token -> token + ":*")
+                .collect(Collectors.joining(" & "));
     }
 
     @GetMapping("/{id}")
