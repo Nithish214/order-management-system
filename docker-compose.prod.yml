@@ -198,11 +198,17 @@ services:
     depends_on:
       - order-service
       - inventory-service
+      - redis
     environment:
       # Docker Compose service names resolve via its embedded DNS -- this is what makes
       # "order-service" a valid hostname here, unlike on your local machine.
       ORDER_SERVICE_URL: http://order-service:8081
       INVENTORY_SERVICE_URL: http://inventory-service:8082
+      # Backs the order-creation rate limiter's token-bucket counters (RequestRateLimiter
+      # filter, application.yml) -- the same Redis instance inventory-service already
+      # caches against, not a second one.
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI}
       # Backs the BFF (AuthController/CognitoAuthClient) -- login/refresh now happen
       # server-side here instead of the browser calling Cognito directly, so the refresh

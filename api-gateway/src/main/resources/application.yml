@@ -53,6 +53,15 @@ spring:
       # fetch" instead of a normal 401. CORS is now configured once, in SecurityConfig's own
       # CorsWebFilter, which runs early enough to cover every response this Gateway sends.
 
+  data:
+    # Backs OrderCreationRateLimiterFilter's counters -- the same Redis instance
+    # inventory-service already caches against, reused rather than standing up a second
+    # one, since a rate limiter's counters are exactly the kind of small, ephemeral,
+    # loseable-on-restart data Redis already exists here to hold.
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   security:
     oauth2:
       resourceserver:

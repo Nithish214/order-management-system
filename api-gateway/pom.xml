@@ -58,6 +58,18 @@
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
+        <!-- Backs the RequestRateLimiter gateway filter (RedisRateLimiter implementation):
+             the token-bucket counters themselves live in Redis (the same instance
+             inventory-service already uses for caching) so the limit is enforced correctly
+             even though this Gateway can, in principle, run as more than one instance;
+             an in-memory counter would let each instance enforce its own separate limit
+             instead of one shared one. Reactive client (Lettuce, via this starter), matching
+             the rest of this service's WebFlux/reactive stack. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
