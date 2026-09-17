@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -98,13 +99,18 @@ public class ProductController {
             @RequestParam(required = false) String category,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
-            @RequestParam(defaultValue = "featured") String sort
+            @RequestParam(defaultValue = "featured") String sort,
+            // Set by the Gateway's UserIdentityHeaderFilter, never by the caller directly
+            // (these ports are off the public internet -- see this class's own comment).
+            // defaultValue "false" also covers local/Postman testing straight against
+            // this service, where no gateway ever sets it at all.
+            @RequestHeader(value = "X-User-Is-Admin", defaultValue = "false") boolean isAdmin
     ) {
         Pageable pageable = buildPageable(page, size, sort);
         Page<Product> results = (category == null || category.isBlank())
                 ? productRepository.findAll(pageable)
                 : productRepository.findByCategory(category, pageable);
-        return ResponseEntity.ok(PagedResponse.from(results.map(ProductResponse::from)));
+        return ResponseEntity.ok(PagedResponse.from(results.map(product -> ProductResponse.from(product, isAdmin))));
     }
 
     // Shared by every paginated endpoint below -- keeps size within (1, MAX_PAGE_SIZE]
@@ -194,13 +200,14 @@ public class ProductController {
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
-            @RequestParam(defaultValue = "featured") String sort
+            @RequestParam(defaultValue = "featured") String sort,
+            @RequestHeader(value = "X-User-Is-Admin", defaultValue = "false") boolean isAdmin
     ) {
         String prefixQuery = toPrefixTsQuery(q);
         Page<Product> results = prefixQuery.isEmpty()
                 ? productRepository.findAll(buildPageable(page, size, sort))
                 : productRepository.searchByPrefixTsQuery(prefixQuery, PageRequest.of(page, clampPageSize(size)));
-        return ResponseEntity.ok(PagedResponse.from(results.map(ProductResponse::from)));
+        return ResponseEntity.ok(PagedResponse.from(results.map(product -> ProductResponse.from(product, isAdmin))));
     }
 
     // Turns raw user input ("web cam") into a Postgres tsquery string ("web:* & cam:*")
@@ -229,10 +236,13 @@ public class ProductController {
 
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
-    public ResponseEntity<ProductResponse> getProduct(@PathVariable Long id) {
+    public ResponseEntity<ProductResponse> getProduct(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Is-Admin", defaultValue = "false") boolean isAdmin
+    ) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found: " + id));
-        return ResponseEntity.ok(ProductResponse.from(product));
+        return ResponseEntity.ok(ProductResponse.from(product, isAdmin));
     }
 
     // Step 1 of the upload flow: hands back a short-lived S3 URL the browser will PUT the

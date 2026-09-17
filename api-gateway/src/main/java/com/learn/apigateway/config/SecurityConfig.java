@@ -71,15 +71,32 @@ public class SecurityConfig {
                         // cookie (no Bearer token); logout must still work against an
                         // already-expired access token. See AuthController.
                         .pathMatchers(HttpMethod.POST, "/auth/login", "/auth/refresh", "/auth/logout").permitAll()
+                        // Stock levels are admin-only information, full stop -- not just hidden in
+                        // the frontend (ProductsPage/ProductDetailPage only render/fetch this for
+                        // isAdmin), enforced here too so a non-admin genuinely can't see it, not
+                        // merely isn't shown it. /stock/** (not just /stock/*/restock below) covers
+                        // both the plain listing and the per-product lookup -- same wildcard the
+                        // routing config below already relies on to match both /stock and /stock/{id}.
+                        .pathMatchers(HttpMethod.GET, "/stock/**").hasAuthority("ROLE_admin")
                         // Most specific rule next: restock additionally requires the "admin" group.
                         // hasAuthority checks for the exact "ROLE_admin" authority our converter below
                         // produces from the token's cognito:groups claim.
                         .pathMatchers(HttpMethod.POST, "/stock/*/restock").hasAuthority("ROLE_admin")
                         // Same admin-only reasoning for product image uploads: any valid token can
                         // still read /products (see the final rule below), but only an admin can mint
-                        // an upload URL or attach an image to a product.
+                        // an upload URL, confirm one, or delete an image.
+                        //
+                        // Fixed a real gap here: the two rules below used to be a single
+                        // `PUT /products/*/image` rule, which matched NO actual endpoint at all
+                        // (ProductController's real routes are POST .../images and
+                        // DELETE .../images/{imageId} -- plural, and never PUT). That meant both
+                        // fell through to the generic "any authenticated user" rule at the bottom --
+                        // any logged-in non-admin could attach or delete a product's images. Caught
+                        // by actually reading this file against the controller's real @PostMapping/
+                        // @DeleteMapping annotations, not by trusting the rule's own comment.
                         .pathMatchers(HttpMethod.POST, "/products/*/image-upload-url").hasAuthority("ROLE_admin")
-                        .pathMatchers(HttpMethod.PUT, "/products/*/image").hasAuthority("ROLE_admin")
+                        .pathMatchers(HttpMethod.POST, "/products/*/images").hasAuthority("ROLE_admin")
+                        .pathMatchers(HttpMethod.DELETE, "/products/*/images/*").hasAuthority("ROLE_admin")
                         // Every other route just needs any validly-signed, unexpired token.
                         .anyExchange().authenticated()
                 )
