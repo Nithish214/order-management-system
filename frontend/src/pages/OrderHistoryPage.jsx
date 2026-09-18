@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
+import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import StatusBadge from "../components/StatusBadge";
 import AppHeader from "../components/AppHeader";
@@ -8,6 +9,7 @@ import "./OrderHistoryPage.css";
 
 export default function OrderHistoryPage() {
   const apiFetch = useApiFetch();
+  const { formatPrice } = useCurrency();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -90,7 +92,7 @@ export default function OrderHistoryPage() {
                   <StatusBadge status={order.status} />
                 </div>
                 <div className="history-row-meta text-muted">
-                  <span>${order.totalAmount.toFixed(2)}</span>
+                  <span>{formatPrice(order.totalAmount)}</span>
                   <span>{new Date(order.createdAt).toLocaleString()}</span>
                 </div>
               </li>

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { addProductImage, deleteProductImage } from "../api/productImages";
 import { useCart } from "../cart/CartContext";
+import { useCurrency } from "../currency/CurrencyContext";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
@@ -20,6 +21,7 @@ export default function ProductDetailPage() {
   const { id } = useParams();
   const apiFetch = useApiFetch();
   const cart = useCart();
+  const { formatPrice } = useCurrency();
   const { isAdmin } = useAuth();
   const fileInputRef = useRef(null);
 
@@ -242,7 +244,7 @@ export default function ProductDetailPage() {
               regular customer needs to see. */}
           {isAdmin && <p className="detail-sku text-muted">{product.sku}</p>}
           <h1 className="detail-name">{product.name}</h1>
-          <p className="detail-price">${product.unitPrice.toFixed(2)}</p>
+          <p className="detail-price">{formatPrice(product.unitPrice)}</p>
           {/* Admin-only -- a regular shopper never sees stock levels at all now, "Out of
               stock" included. A shopper CAN still add an out-of-stock item to their cart
               with no warning here; the actual order still gets rejected at checkout

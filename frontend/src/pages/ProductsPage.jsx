@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { useAuth } from "../auth/AuthContext";
 import { useCart } from "../cart/CartContext";
+import { useCurrency } from "../currency/CurrencyContext";
 import CartSummary from "../cart/CartSummary";
 import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
@@ -20,6 +21,7 @@ export default function ProductsPage() {
   const apiFetch = useApiFetch();
   const cart = useCart();
   const { isAdmin } = useAuth();
+  const { formatPrice } = useCurrency();
 
   const [products, setProducts] = useState([]);
   // Keyed by productId -- Inventory Service's own data (GET /stock), fetched
@@ -376,7 +378,7 @@ export default function ProductsPage() {
                         )}
                       </div>
                       <p className="product-card-name">{product.name}</p>
-                      <p className="product-card-price">${product.unitPrice.toFixed(2)}</p>
+                      <p className="product-card-price">{formatPrice(product.unitPrice)}</p>
                     </Link>
                     {/* Admin-only -- a regular shopper never sees stock levels, "Out of
                         stock" included. Adding an out-of-stock item to the cart still

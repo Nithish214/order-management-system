@@ -76,9 +76,16 @@
   justify-content: space-between;
   align-items: baseline;
   padding-top: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-1);
   border-top: var(--border-width) solid var(--color-border);
   font-weight: var(--font-weight-semibold);
+}
+
+/* Sits right under the total it's clarifying, not floating in its own paragraph's worth
+   of default spacing -- pulled close by .cart-total's own reduced margin-bottom above. */
+.cart-currency-note {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm-size);
 }
 
 .cart-summary .btn-primary {

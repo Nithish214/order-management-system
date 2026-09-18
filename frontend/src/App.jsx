@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { CartProvider } from "./cart/CartContext";
+import { CurrencyProvider } from "./currency/CurrencyContext";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import ProductsPage from "./pages/ProductsPage";
@@ -92,9 +93,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <CartProvider>
-          <AppRoutes />
-        </CartProvider>
+        <CurrencyProvider>
+          <CartProvider>
+            <AppRoutes />
+          </CartProvider>
+        </CurrencyProvider>
       </AuthProvider>
     </BrowserRouter>
   );

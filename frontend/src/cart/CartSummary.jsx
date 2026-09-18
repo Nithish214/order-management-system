@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { useAuth } from "../auth/AuthContext";
 import { useCart } from "./CartContext";
+import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import "./CartSummary.css";
 
@@ -17,6 +18,7 @@ export default function CartSummary() {
   const apiFetch = useApiFetch();
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const { currencyCode, formatPrice } = useCurrency();
   const [placingOrder, setPlacingOrder] = useState(false);
   const [error, setError] = useState(null);
 
@@ -99,7 +101,7 @@ export default function CartSummary() {
                 <div className="cart-item-info">
                   <p className="cart-item-name">{item.name}</p>
                   <p className="cart-item-line-total">
-                    ${(item.unitPrice * item.quantity).toFixed(2)}
+                    {formatPrice(item.unitPrice * item.quantity)}
                   </p>
                 </div>
                 <div className="cart-item-controls">
@@ -135,8 +137,16 @@ export default function CartSummary() {
           </ul>
           <div className="cart-total">
             <span>Total</span>
-            <strong>${cart.total.toFixed(2)}</strong>
+            <strong>{formatPrice(cart.total)}</strong>
           </div>
+          {/* Order Service always charges in USD regardless of what's shown here (see
+              CurrencyContext's own comment) -- this is the one place that actually matters
+              to say so, right next to the number someone's about to commit to paying. */}
+          {currencyCode !== "USD" && (
+            <p className="text-muted cart-currency-note">
+              Estimated in {currencyCode} -- you'll be charged in USD.
+            </p>
+          )}
           {/* Same rule Order Service itself enforces (see OrderController's isAdmin check) --
               shown here too, not just left to the 403 that would otherwise come back, so an
               admin browsing the catalog sees why there's no way to check out rather than

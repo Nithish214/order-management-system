@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
+import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import AppHeader from "../components/AppHeader";
 import "./OrderStatusPage.css";
@@ -19,6 +20,7 @@ export default function OrderStatusPage() {
   // the hood, tied to whatever pattern you wrote in <Route path="/orders/:id">.
   const { id } = useParams();
   const apiFetch = useApiFetch();
+  const { currencyCode, formatPrice } = useCurrency();
   const [order, setOrder] = useState(null);
   const [error, setError] = useState(null);
   const [cancelling, setCancelling] = useState(false);
@@ -159,14 +161,17 @@ export default function OrderStatusPage() {
                   {item.productName} &times; {item.quantity}
                 </span>
               </Link>
-              <span>${item.lineTotal.toFixed(2)}</span>
+              <span>{formatPrice(item.lineTotal)}</span>
             </li>
           ))}
         </ul>
         <div className="order-total">
           <span>Total</span>
-          <strong>${order.totalAmount.toFixed(2)}</strong>
+          <strong>{formatPrice(order.totalAmount)}</strong>
         </div>
+        {currencyCode !== "USD" && (
+          <p className="text-muted">Estimated in {currencyCode} -- charged in USD.</p>
+        )}
       </div>
     </>
   );
