@@ -152,7 +152,18 @@ pipeline {
                 }
             }
             steps {
-                sshagent(credentials: ['ec2-ssh-key']) {
+                // withCredentials + sshUserPrivateKey, not the sshagent() step -- that
+                // needs the separate "SSH Agent" plugin, which turned out not to be
+                // installed (a real NoSuchMethodError on an actual run, not something
+                // caught by review). This binds the same 'ec2-ssh-key' credential to a
+                // temporary key FILE instead of an agent process, using only
+                // Credentials Binding, which is already in play for the AWS credentials
+                // below -- no extra plugin to install.
+                withCredentials([sshUserPrivateKey(
+                    credentialsId: 'ec2-ssh-key',
+                    keyFileVariable: 'SSH_KEY',
+                    usernameVariable: 'SSH_USER'
+                )]) {
                     script {
                         def services = []
                         if (env.BUILD_ORDER == 'true') services << 'order-service'
@@ -162,7 +173,7 @@ pipeline {
 
                         for (svc in services) {
                             echo "Shipping ${svc} to EC2..."
-                            sh "docker save order-management-${svc}:latest | gzip | ssh -o StrictHostKeyChecking=accept-new ubuntu@${GATEWAY_HOST} 'gunzip | docker load'"
+                            sh "docker save order-management-${svc}:latest | gzip | ssh -i \"\$SSH_KEY\" -o StrictHostKeyChecking=accept-new \$SSH_USER@${GATEWAY_HOST} 'gunzip | docker load'"
                         }
 
                         def serviceArgs = services.join(' ')
@@ -172,7 +183,7 @@ pipeline {
                         // ones after they restart, the same real bug this project's own
                         // start-all.ps1 already works around for the exact same reason.
                         sh """
-                            ssh -o StrictHostKeyChecking=accept-new ubuntu@${GATEWAY_HOST} '
+                            ssh -i "\$SSH_KEY" -o StrictHostKeyChecking=accept-new \$SSH_USER@${GATEWAY_HOST} '
                                 cd order-management &&
                                 git pull &&
                                 sudo docker compose -f docker-compose.prod.yml up -d ${serviceArgs} &&

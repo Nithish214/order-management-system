@@ -31,11 +31,12 @@ Paste that into the setup wizard at http://localhost:8090.
 
 ## 3. Install plugins
 
-Choose **"Install suggested plugins"**, then go to **Manage Jenkins → Plugins →
-Available** and additionally install:
-
-- **SSH Agent** — the `Jenkinsfile`'s deploy stage uses `sshagent(...)`, which this
-  plugin provides; it's not always part of the suggested set.
+Choose **"Install suggested plugins"** — that's the only plugin step needed. The
+`Jenkinsfile`'s deploy stage originally used the `sshagent()` step (from the separate
+"SSH Agent" plugin), but that turned out not to be part of the suggested set and isn't
+installed by default -- switched to `withCredentials([sshUserPrivateKey(...)])` instead,
+which only needs Credentials Binding (already in the suggested set, and already needed
+for the AWS credentials below anyway).
 
 Create your admin user when prompted.
 
