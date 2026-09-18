@@ -142,8 +142,17 @@ export default function OrderStatusPage() {
         <ul className="order-items">
           {order.items.map((item) => (
             <li className="order-item" key={item.productId}>
-              <span>
-                {item.productName} &times; {item.quantity}
+              <span className="order-item-info">
+                <span className="order-item-thumb">
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.productName} />
+                  ) : (
+                    <span className="order-item-thumb-placeholder" aria-hidden="true" />
+                  )}
+                </span>
+                <span>
+                  {item.productName} &times; {item.quantity}
+                </span>
               </span>
               <span>${item.lineTotal.toFixed(2)}</span>
             </li>

@@ -47,6 +47,16 @@ public class OrderResponse {
         // order-fetching queries already `join fetch i.product`, so this is zero extra
         // queries, not a new N+1.
         private String productName;
+        // Same "first image is the thumbnail" convention as everywhere else this app
+        // shows one image for a product (the grid card, the cart) -- Product.images is
+        // already @OrderBy("id ASC"), so images.get(0) is that thumbnail. Null (not an
+        // empty string) when the product has no image at all, matching ProductResponse's
+        // own images list being empty in that case -- the frontend already knows how to
+        // render "no image yet" as a plain placeholder rather than a broken-image icon.
+        // Free to add despite Product.images being LAZY: it's @BatchSize(size = 100) on
+        // the entity itself (see Product.java), so Hibernate batches this across every
+        // order item's product in one extra query, not one query per item.
+        private String imageUrl;
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal lineTotal;
@@ -55,6 +65,8 @@ public class OrderResponse {
             OrderItemResponse dto = new OrderItemResponse();
             dto.setProductId(item.getProduct().getId());
             dto.setProductName(item.getProduct().getName());
+            var images = item.getProduct().getImages();
+            dto.setImageUrl(images.isEmpty() ? null : images.get(0).getImageUrl());
             dto.setQuantity(item.getQuantity());
             dto.setUnitPrice(item.getUnitPrice());
             dto.setLineTotal(item.getLineTotal());

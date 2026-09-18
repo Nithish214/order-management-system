@@ -318,6 +318,45 @@
   border-top: var(--border-width) solid var(--color-border);
 }
 
+.order-item-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* min-width: 0 lets the name actually wrap/ellipsis-truncate inside a flex row instead
+     of forcing the row wider than the page -- flex items default to min-width: auto,
+     the same fix .pipeline-stage above already needed for the same reason. */
+  min-width: 0;
+}
+
+/* Same small-fixed-square treatment as every other thumbnail in this app (the product
+   grid card, the detail page) -- just smaller, since this is one line among several in
+   a list, not the page's main subject. */
+.order-item-thumb {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.order-item-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* No image for this product -- a plain tinted square, same as
+   .product-thumb-placeholder, never a broken-image icon. */
+.order-item-thumb-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--color-border);
+}
+
 .order-total {
   display: flex;
   justify-content: space-between;
