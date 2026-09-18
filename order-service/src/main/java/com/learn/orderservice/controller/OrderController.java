@@ -73,8 +73,21 @@ public class OrderController {
             // means something bypassed the Gateway or the filter broke, so failing loudly (a 400,
             // via Spring's default handling of a required header) is correct here, not a fallback.
             @RequestHeader("X-User-Sub") String cognitoSub,
-            @RequestHeader("Idempotency-Key") String idempotencyKey
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            // Same trusted header ProductController already reads to redact admin-only fields --
+            // reused here for the opposite shape of check: not "hide some data," but "refuse the
+            // whole request." An admin account manages the catalog/stock, it isn't a customer, so
+            // it placing real orders would pollute order history and stock reservations with test
+            // noise. defaultValue "false" only matters if this header is ever missing entirely
+            // (shouldn't happen behind the Gateway -- see the comment above), and false is the
+            // safe side to default to: it lets the request proceed to the real checks below rather
+            // than locking out a genuine customer because of a missing header.
+            @RequestHeader(value = "X-User-Is-Admin", defaultValue = "false") boolean isAdmin
     ) {
+        if (isAdmin) {
+            throw new ForbiddenException("Admin accounts cannot place orders");
+        }
+
         // Fast path: this exact key has already resulted in an order (a plain retry, sent
         // sequentially after the first one already finished -- the common case, not the race
         // below). No writes at all here, just a lookup, so a client that retries constantly

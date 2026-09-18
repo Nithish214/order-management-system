@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
+import { useAuth } from "../auth/AuthContext";
 import { useCart } from "./CartContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import "./CartSummary.css";
@@ -15,6 +16,7 @@ export default function CartSummary() {
   const cart = useCart();
   const apiFetch = useApiFetch();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [placingOrder, setPlacingOrder] = useState(false);
   const [error, setError] = useState(null);
 
@@ -135,9 +137,17 @@ export default function CartSummary() {
             <span>Total</span>
             <strong>${cart.total.toFixed(2)}</strong>
           </div>
-          <button className="btn-primary" onClick={handlePlaceOrder} disabled={placingOrder}>
-            {placingOrder ? "Placing order..." : "Place order"}
-          </button>
+          {/* Same rule Order Service itself enforces (see OrderController's isAdmin check) --
+              shown here too, not just left to the 403 that would otherwise come back, so an
+              admin browsing the catalog sees why there's no way to check out rather than
+              hitting a surprise error only after clicking a button that looked enabled. */}
+          {isAdmin ? (
+            <p className="text-muted">Admin accounts can't place orders.</p>
+          ) : (
+            <button className="btn-primary" onClick={handlePlaceOrder} disabled={placingOrder}>
+              {placingOrder ? "Placing order..." : "Place order"}
+            </button>
+          )}
         </>
       )}
     </div>
