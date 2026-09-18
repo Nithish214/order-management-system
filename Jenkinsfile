@@ -28,6 +28,13 @@ pipeline {
         GATEWAY_HOST = 'nithish-ordermgmt.duckdns.org'
         FRONTEND_BUCKET = 'order-management-frontend-244689414185'
         CLOUDFRONT_DISTRIBUTION_ID = 'E1MH9X3BUX6CH5'
+        // Not secrets -- see frontend/.env.example's own comment: the Cognito app
+        // client has no client secret, and the Gateway URL is necessarily public
+        // anyway (it's what the browser calls). Safe to hardcode here the same way
+        // docker-compose.prod.yml already hardcodes this exact client ID for the
+        // Gateway's own side of the same Cognito app client.
+        VITE_COGNITO_REGION = 'eu-west-1'
+        VITE_COGNITO_CLIENT_ID = '48v29rgvebkkaj46cjuo4vqjb5'
         AWS_REGION = 'eu-west-1'
     }
 
@@ -107,7 +114,23 @@ pipeline {
             when { environment name: 'BUILD_FRONTEND', value: 'true' }
             steps {
                 dir('frontend') {
-                    sh 'npm ci && npm run lint && npm run build'
+                    // frontend/.env is gitignored (it's where real per-developer values
+                    // live -- see .env.example), so it simply doesn't exist in this
+                    // fresh Jenkins checkout. Found the hard way, in production, not by
+                    // review: without it, Vite bakes in literal `undefined` for every
+                    // VITE_* reference, so bffLogin's fetch call becomes
+                    // fetch("undefined/auth/login") -- a relative URL the browser
+                    // resolves against the CloudFront origin itself, landing on the
+                    // SPA's own index.html instead of the real API. That HTML, handed
+                    // to response.json(), is exactly "Unexpected token '<'".
+                    sh '''
+                        cat > .env << EOF
+VITE_GATEWAY_URL=https://${GATEWAY_HOST}
+VITE_COGNITO_REGION=${VITE_COGNITO_REGION}
+VITE_COGNITO_CLIENT_ID=${VITE_COGNITO_CLIENT_ID}
+EOF
+                        npm ci && npm run lint && npm run build
+                    '''
                 }
             }
         }
