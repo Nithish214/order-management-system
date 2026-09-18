@@ -216,6 +216,18 @@ requires a valid Cognito-issued JWT, and the restock route additionally requires
 caller's token to carry the `admin` group. Order Service and Inventory Service have
 **zero code changes** — they remain completely unaware auth exists at all.
 
+> **Update, later:** two things above are now out of date. First, the `admin` group is
+> no longer just about the restock route -- it also gates `GET /stock/**` (stock levels
+> are hidden from regular users entirely, not just restocking) and the product
+> image-management routes (a stale security rule meant those had silently fallen through
+> to "any authenticated user" for a while -- see README.md's API table for the current,
+> correct set). Second, "zero code changes" for Order Service stopped being true once
+> field-level redaction arrived: it now reads an `X-User-Is-Admin` header (set by the
+> Gateway from the same JWT claim, alongside the existing `X-User-Sub`) to decide whether
+> a product's `sku` belongs in the response at all. Order Service still has no idea
+> Cognito exists, doesn't validate anything -- it just trusts one more header from the
+> Gateway than it used to.
+
 ## Concepts
 
 - **User Pool, not Identity Pool.** A User Pool is a user directory + authentication
