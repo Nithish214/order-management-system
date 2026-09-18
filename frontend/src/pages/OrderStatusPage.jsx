@@ -143,7 +143,7 @@ export default function OrderStatusPage() {
           {order.items.map((item) => (
             <li className="order-item" key={item.productId}>
               <span>
-                Product #{item.productId} &times; {item.quantity}
+                {item.productName} &times; {item.quantity}
               </span>
               <span>${item.lineTotal.toFixed(2)}</span>
             </li>

@@ -38,6 +38,15 @@ public class OrderResponse {
     @Setter
     public static class OrderItemResponse {
         private Long productId;
+        // Read live from the current Product row, not snapshotted onto OrderItem the way
+        // unitPrice/lineTotal deliberately are (see OrderCreationService) -- a renamed
+        // product would show its new name on old orders, unlike price, which is meant to
+        // freeze at whatever it cost when you actually bought it. Acceptable here: this
+        // catalog's names don't change after being seeded, and "what did I order" is a
+        // much weaker promise than "what did I pay." Free to add besides -- both
+        // order-fetching queries already `join fetch i.product`, so this is zero extra
+        // queries, not a new N+1.
+        private String productName;
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal lineTotal;
@@ -45,6 +54,7 @@ public class OrderResponse {
         public static OrderItemResponse from(com.learn.orderservice.entity.OrderItem item) {
             OrderItemResponse dto = new OrderItemResponse();
             dto.setProductId(item.getProduct().getId());
+            dto.setProductName(item.getProduct().getName());
             dto.setQuantity(item.getQuantity());
             dto.setUnitPrice(item.getUnitPrice());
             dto.setLineTotal(item.getLineTotal());
