@@ -142,7 +142,12 @@ export default function OrderStatusPage() {
         <ul className="order-items">
           {order.items.map((item) => (
             <li className="order-item" key={item.productId}>
-              <span className="order-item-info">
+              {/* Links to the product's own page -- same "thumbnail + name are one
+                  clickable unit" pattern as the product grid card, price stays outside
+                  the link since it's this ORDER's price at purchase time (see
+                  OrderResponse's own comment on why it's snapshotted, not live),
+                  not something clicking through to today's product page would explain. */}
+              <Link to={`/products/${item.productId}`} className="order-item-info">
                 <span className="order-item-thumb">
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt={item.productName} />
@@ -150,10 +155,10 @@ export default function OrderStatusPage() {
                     <span className="order-item-thumb-placeholder" aria-hidden="true" />
                   )}
                 </span>
-                <span>
+                <span className="order-item-name">
                   {item.productName} &times; {item.quantity}
                 </span>
-              </span>
+              </Link>
               <span>${item.lineTotal.toFixed(2)}</span>
             </li>
           ))}

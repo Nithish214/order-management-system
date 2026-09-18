@@ -318,6 +318,9 @@
   border-top: var(--border-width) solid var(--color-border);
 }
 
+/* Now a <Link>, not a plain <span> -- resets the browser's default link styling the same
+   way .product-card-link does, so this still reads as plain list text until you actually
+   hover it (see the hover rule below), not as a normal blue underlined link. */
 .order-item-info {
   display: flex;
   align-items: center;
@@ -326,6 +329,12 @@
      of forcing the row wider than the page -- flex items default to min-width: auto,
      the same fix .pipeline-stage above already needed for the same reason. */
   min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.order-item-info:hover .order-item-name {
+  text-decoration: underline;
 }
 
 /* Same small-fixed-square treatment as every other thumbnail in this app (the product
