@@ -1,0 +1,29 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DescribeAnyInstance",
+      "Effect": "Allow",
+      "Action": "rds:DescribeDBInstances",
+      "Resource": "*"
+    },
+    {
+      "Sid": "StopThisOneInstanceOnly",
+      "Effect": "Allow",
+      "Action": "rds:StopDBInstance",
+      "Resource": "arn:aws:rds:eu-west-1:244689414185:db:order-management-db"
+    },
+    {
+      "Sid": "ReadItsConnectionMetric",
+      "Effect": "Allow",
+      "Action": "cloudwatch:GetMetricStatistics",
+      "Resource": "*"
+    },
+    {
+      "Sid": "OwnLambdaLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:eu-west-1:244689414185:log-group:/aws/lambda/rds-idle-auto-stop:*"
+    }
+  ]
+}
