@@ -71,6 +71,40 @@ export default function ProductsPage() {
   // debouncedQuery is set, rather than offering a control that would silently do nothing.
   const [sort, setSort] = useState("featured");
 
+  // Which cards currently show the brief "✓ Added" confirmation on their own Add-to-cart
+  // button, instead of a toast or a separate badge -- keeps the feedback right where the
+  // click happened, on that one card, even if several cards are mid-confirmation at once
+  // (a Set, not a single id, so clicking two different cards in quick succession doesn't
+  // cancel either one's confirmation).
+  const [justAddedIds, setJustAddedIds] = useState(() => new Set());
+  // One pending revert timeout per product id, so a second click on the same card while
+  // its confirmation is still showing restarts the timer instead of letting the first
+  // click's timeout cut the second click's confirmation short.
+  const addedTimeoutsRef = useRef({});
+
+  useEffect(() => {
+    const timeouts = addedTimeoutsRef.current;
+    return () => {
+      Object.values(timeouts).forEach(clearTimeout);
+    };
+  }, []);
+
+  function handleAddToCart(product) {
+    cart.addItem(product);
+    setJustAddedIds((prev) => new Set(prev).add(product.id));
+    if (addedTimeoutsRef.current[product.id]) {
+      clearTimeout(addedTimeoutsRef.current[product.id]);
+    }
+    addedTimeoutsRef.current[product.id] = setTimeout(() => {
+      setJustAddedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(product.id);
+        return next;
+      });
+      delete addedTimeoutsRef.current[product.id];
+    }, 1500);
+  }
+
   // Stock: fetched exactly once, on mount -- unlike products (below), it never needs
   // refetching just because a search or category narrows down which rows are showing.
   // Admin-only now (see StockCount's render further down): a regular shopper never sees
@@ -375,10 +409,10 @@ export default function ProductsPage() {
                     {isAdmin && <StockCount quantity={stockByProductId[product.id]} />}
                     <button
                       type="button"
-                      className="btn-secondary product-card-add"
-                      onClick={() => cart.addItem(product)}
+                      className={`btn-secondary product-card-add${justAddedIds.has(product.id) ? " product-card-add-confirmed" : ""}`}
+                      onClick={() => handleAddToCart(product)}
                     >
-                      Add to cart
+                      {justAddedIds.has(product.id) ? "✓ Added" : "Add to cart"}
                     </button>
                   </div>
                 ))}

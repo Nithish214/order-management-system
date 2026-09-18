@@ -220,6 +220,15 @@
   align-self: flex-start;
 }
 
+/* Briefly shown right after a click, on that one card's own button -- reverts to the
+   normal "Add to cart" label on its own (see handleAddToCart's timeout), not tied to
+   hover/focus so it stays visible even if the pointer moves away immediately after. */
+.product-card-add-confirmed {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #fff;
+}
+
 /* ---- Pagination -- centered row below the grid, not pinned to a corner: with the
    category sidebar and cart sidebar both present, a corner-anchored control would sit
    oddly close to one of them depending on viewport width. Centered under the grid
