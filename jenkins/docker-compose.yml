@@ -1,0 +1,40 @@
+# Runs Jenkins locally, in Docker, on this machine -- deliberately NOT on the app's own
+# EC2 instance. That box is already known to be memory-tight even at idle (see the
+# project's own capacity notes); running Maven builds and Docker image builds there too,
+# on every single deploy, would make that worse for no reason when this machine has far
+# more CPU/RAM to spare. Jenkins here just builds artifacts and ships them to EC2 --
+# EC2's own docker-compose.prod.yml only ever runs what it's handed, never builds anything
+# itself once this pipeline is in place.
+#
+# A separate compose file (not merged into the root docker-compose.yml) on purpose: this
+# is infrastructure FOR the project, not part of the project's own runtime services --
+# conflating the two would mean "start the app locally" and "start Jenkins" always
+# happening together, when in practice you'd start Jenkins once and leave it running,
+# independent of whichever app services happen to be up at a given moment.
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jenkins
+    restart: unless-stopped
+    ports:
+      # 8090, not Jenkins's usual 8080 -- api-gateway already claims 8080 on this same
+      # machine during local dev (see the root README), and both being on 8080
+      # simultaneously would mean whichever started second just fails to bind the port.
+      - "8090:8080"
+    volumes:
+      # Persists jobs, credentials, plugins, and build history across container
+      # restarts/rebuilds -- without this, rebuilding this image (e.g. to add a package
+      # to the Dockerfile) would silently wipe every credential and job you'd configured.
+      - jenkins_home:/var/jenkins_home
+      # "Docker outside of Docker" -- gives the CLI installed in jenkins/Dockerfile a real
+      # daemon to talk to (the HOST's, via Docker Desktop), rather than needing a second,
+      # nested daemon running inside this container. This is also exactly what makes an
+      # image built inside a pipeline run show up in `docker images` on the host itself,
+      # and what makes `docker save`/`docker load` (see the Jenkinsfile's deploy stage)
+      # work at all.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  jenkins_home:

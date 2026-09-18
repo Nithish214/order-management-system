@@ -66,6 +66,7 @@ Each service has its own database (own Postgres database locally, and its own Po
 - **Field-level authorization, not just route-level** — some data (a product's SKU) needs to stay hidden from regular users on a route everyone still needs to call (`GET /products`). The Gateway derives an `X-User-Is-Admin` header from the same JWT claim its route rules already check and forwards it alongside the existing `X-User-Sub` identity header; Order Service uses it to omit the field entirely (not just null it) for non-admins. Route-level `hasAuthority` rules can't express this — an all-or-nothing "can you call this endpoint" check doesn't help when the answer to "can you call it" is yes for everyone, but "what's in the response" still needs to differ.
 - **Search, sort, and pagination on a real (if seeded) catalog** — Postgres full-text search (`tsvector`/`tsquery`, prefix-matched and relevance-ranked) with keyword-level tuning driven by two real production bugs (`web` not matching `Webcam` under stemming, then `we` being silently dropped as a stopword); `?sort=`/`?page=`/`?size=` on the plain listing and category filter, deliberately *not* combined with search (a native ranked query and an arbitrary `ORDER BY` can't safely share one `Pageable` — found as a live 500 before it shipped, not by inspection).
 - **Real AWS deployment** — RDS PostgreSQL, Dockerized services on EC2, least-privilege IAM (a role scoped to exactly the CloudWatch permissions needed, nothing more), and security groups that reference each other rather than open IP ranges.
+- **CI/CD that respects the target host's own limits** — a local Jenkins builds every artifact on this machine, not the resource-constrained EC2 box (see its own capacity notes), and ships finished Docker images to it directly over SSH rather than through a registry. A dedicated, least-privilege IAM user handles the frontend's S3/CloudFront deploy step — scoped to exactly those two actions on exactly those two resources, the same philosophy as the EC2 instance's own CloudWatch-only role.
 
 ## Local development
 
@@ -110,10 +111,14 @@ The three `/auth/*` routes are how a client gets (or gives up) a token in the fi
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the full provisioning walkthrough (RDS, EC2, IAM, security groups, CloudWatch) and cost breakdown. `scripts/start-all.ps1` / `scripts/stop-all.ps1` start and stop the deployed environment (copy `scripts/config.example.ps1` to `scripts/config.ps1` with your own instance/DB identifiers first).
 
+## CI/CD
+
+A local Jenkins instance (see [jenkins/README.md](jenkins/README.md) for setup) builds every deployable artifact — 4 backend Docker images, the frontend bundle — on this machine rather than on the app's own memory-tight EC2 instance. Deploying is a manual, explicit step: every push builds and packages automatically, but nothing reaches EC2 or S3 without clicking "Deploy" in the Jenkins UI (see the [`Jenkinsfile`](Jenkinsfile) at the repo root). No container registry involved — finished images are shipped straight to EC2 over SSH (`docker save | ssh ... docker load`), the same connection every other deploy in this project already uses.
+
 ## Known limitations
 
 - No tests.
 - Payment Service's payment is entirely simulated (a coin flip, not a real gateway) — no Notification service yet either.
-- No CI/CD — deploys are manual (`git pull` + `docker compose up --build` on the EC2 instance).
+- No automated tests run in CI — the Jenkins pipeline's "build" stage is really "does it compile" (each Dockerfile's own `mvn package`), since there's no test suite yet for it to run.
 - Full-text search always stays ranked by relevance — `?sort=` has no effect once `?q=` is actually a keyword match (see the API table above for why: a native ranked query and Spring Data's own `Sort` can't safely share a `Pageable`, and this scope was deliberately not expanded to work around that).
 - This catalog's product names never change after being seeded, which is why product name/image on an order's line items are read live from the current product rather than snapshotted at purchase time the way price is — a renamed or re-photographed product would show its new name/photo on old orders. Fine for a seeded demo catalog; a real store would snapshot these too.
