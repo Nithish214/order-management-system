@@ -1,11 +1,17 @@
 // Runs on the local Jenkins container (see jenkins/docker-compose.yml) -- this machine
 // builds every artifact (Docker images, the frontend bundle); EC2 only ever receives
-// finished artifacts and runs them, never builds anything itself. Deliberately keeps
-// Jenkins itself minimal (just the Docker CLI + an SSH client, see jenkins/Dockerfile) --
-// every tool-specific step below (Node, the AWS CLI) runs inside its own short-lived
-// Docker container instead of being installed onto the Jenkins image directly, the same
-// "Docker outside of Docker" pattern that lets this container talk to the host's daemon
-// at all.
+// finished artifacts and runs them, never builds anything itself.
+//
+// Node and the AWS CLI are installed directly on the Jenkins image (see
+// jenkins/Dockerfile), not run via ephemeral `docker run -v $WORKSPACE/...` containers --
+// that was the original design, abandoned after an actual pipeline run proved it broken:
+// a bind mount from inside this Docker-outside-of-Docker setup is resolved by the HOST's
+// daemon, which has no idea what this container's own $WORKSPACE path means, and
+// silently mounts an empty directory instead. `docker build`/`docker save` (the backend
+// image stages, and the deploy stage) don't have this problem -- the CLI reads the local
+// filesystem itself and streams the content over the API, no shared-path assumption
+// involved -- so Docker itself stays install-directly-on-the-image too, just for a
+// different, unaffected reason (see jenkins/Dockerfile's own comment).
 //
 // Deploying is a manual, explicit decision (see the "Approve deploy" stage) -- every
 // build compiles and packages automatically, but nothing reaches EC2 or S3 without a
@@ -90,13 +96,19 @@ pipeline {
             }
         }
 
-        // node:20-alpine, not Node installed on the Jenkins image itself -- same
-        // ephemeral-container pattern as the AWS CLI step further down, so the Jenkins
-        // image never needs updating just because the frontend's own tooling changes.
+        // Runs directly (Node is installed on the Jenkins image itself -- see
+        // jenkins/Dockerfile), NOT via an ephemeral `docker run -v $WORKSPACE/...`
+        // container the way the backend images build. Found on a real run why that
+        // doesn't work: a bind mount from inside a Docker-outside-of-Docker container is
+        // resolved by the HOST daemon, which has no idea what this container's own
+        // $WORKSPACE path even means -- it silently mounted an empty directory instead
+        // of the checked-out frontend code.
         stage('Frontend: lint + build') {
             when { environment name: 'BUILD_FRONTEND', value: 'true' }
             steps {
-                sh 'docker run --rm -v "$WORKSPACE/frontend:/app" -w /app node:20-alpine sh -c "npm ci && npm run lint && npm run build"'
+                dir('frontend') {
+                    sh 'npm ci && npm run lint && npm run build'
+                }
             }
         }
 
@@ -176,6 +188,11 @@ pipeline {
         // comment on this exact flag for why: dist/ never contains admin-uploaded product
         // photos, and --delete syncing without this exclusion previously wiped every one
         // of them in production.
+        //
+        // Runs the AWS CLI directly (installed on the Jenkins image -- see
+        // jenkins/Dockerfile), not via an ephemeral container bind-mounting dist/ -- same
+        // Docker-outside-of-Docker bind-mount problem as the frontend build stage above,
+        // just one step later in the pipeline.
         stage('Deploy frontend') {
             when { environment name: 'BUILD_FRONTEND', value: 'true' }
             steps {
@@ -185,14 +202,8 @@ pipeline {
                     passwordVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
                     sh '''
-                        docker run --rm \
-                          -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION=${AWS_REGION} \
-                          -v "$WORKSPACE/frontend/dist:/dist" \
-                          amazon/aws-cli s3 sync /dist "s3://${FRONTEND_BUCKET}" --delete --exclude "product-images/*"
-
-                        docker run --rm \
-                          -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION=${AWS_REGION} \
-                          amazon/aws-cli cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
+                        aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" --delete --exclude "product-images/*"
+                        aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
                     '''
                 }
             }

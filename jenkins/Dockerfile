@@ -21,10 +21,28 @@ USER root
 # this image actually needs (there's no daemon running in here at all; see
 # jenkins/docker-compose.yml's docker.sock mount for why a CLI alone is enough).
 ARG DOCKER_CLI_VERSION=27.3.1
-RUN apt-get update && apt-get install -y --no-install-recommends curl openssh-client \
+RUN apt-get update && apt-get install -y --no-install-recommends curl openssh-client unzip \
     && curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz" \
        | tar -xz --strip-components=1 -C /usr/local/bin docker/docker \
     && rm -rf /var/lib/apt/lists/*
+
+# Node and the AWS CLI live INSIDE this image now, not as ephemeral `docker run -v
+# $WORKSPACE/...` containers the way the Docker image builds run -- found the hard way,
+# on a real pipeline run, why that doesn't work for these two: `docker run -v` is a bind
+# mount, resolved by the HOST's daemon (this is "Docker outside of Docker" -- see the
+# .sock comment below), which has no idea what "$WORKSPACE/frontend" even means inside
+# THIS container's own filesystem. It silently mounted an empty directory instead of the
+# checked-out frontend code, and `npm ci` failed with no package-lock.json to find.
+# `docker build`/`docker save` don't have this problem -- the CLI reads the local
+# filesystem itself and streams the content over the API, no shared-path assumption
+# involved -- which is exactly why those steps worked fine and only the bind-mounted
+# ones didn't.
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip \
+    && unzip -q /tmp/awscliv2.zip -d /tmp \
+    && /tmp/aws/install \
+    && rm -rf /tmp/awscliv2.zip /tmp/aws /var/lib/apt/lists/*
 
 # Stays root, deliberately -- not the usual jenkins/jenkins image default. The mounted
 # /var/run/docker.sock's group ownership varies by Docker Desktop's own setup on
