@@ -220,13 +220,13 @@
   align-self: flex-start;
 }
 
-/* Briefly shown right after a click, on that one card's own button -- reverts to the
-   normal "Add to cart" label on its own (see handleAddToCart's timeout), not tied to
-   hover/focus so it stays visible even if the pointer moves away immediately after. */
-.product-card-add-confirmed {
-  background: var(--color-success);
-  border-color: var(--color-success);
-  color: #fff;
+/* Same slot as .product-card-add above -- once a product is in the cart, its card shows
+   this instead of the button (see the grid's conditional render), so it needs the same
+   "stick to the bottom of the card" placement rather than the shared .quantity-stepper's
+   default inline flow (fine inside the cart panel, where it's not competing with a name/
+   price block above it for vertical space the way it is here). */
+.product-card-stepper {
+  margin-top: auto;
 }
 
 /* ---- Pagination -- centered row below the grid, not pinned to a corner: with the

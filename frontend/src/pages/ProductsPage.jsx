@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { useAuth } from "../auth/AuthContext";
@@ -71,39 +71,16 @@ export default function ProductsPage() {
   // debouncedQuery is set, rather than offering a control that would silently do nothing.
   const [sort, setSort] = useState("featured");
 
-  // Which cards currently show the brief "✓ Added" confirmation on their own Add-to-cart
-  // button, instead of a toast or a separate badge -- keeps the feedback right where the
-  // click happened, on that one card, even if several cards are mid-confirmation at once
-  // (a Set, not a single id, so clicking two different cards in quick succession doesn't
-  // cancel either one's confirmation).
-  const [justAddedIds, setJustAddedIds] = useState(() => new Set());
-  // One pending revert timeout per product id, so a second click on the same card while
-  // its confirmation is still showing restarts the timer instead of letting the first
-  // click's timeout cut the second click's confirmation short.
-  const addedTimeoutsRef = useRef({});
-
-  useEffect(() => {
-    const timeouts = addedTimeoutsRef.current;
-    return () => {
-      Object.values(timeouts).forEach(clearTimeout);
-    };
-  }, []);
-
-  function handleAddToCart(product) {
-    cart.addItem(product);
-    setJustAddedIds((prev) => new Set(prev).add(product.id));
-    if (addedTimeoutsRef.current[product.id]) {
-      clearTimeout(addedTimeoutsRef.current[product.id]);
-    }
-    addedTimeoutsRef.current[product.id] = setTimeout(() => {
-      setJustAddedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(product.id);
-        return next;
-      });
-      delete addedTimeoutsRef.current[product.id];
-    }, 1500);
-  }
+  // productId -> quantity currently in the cart, derived from cart.items (the cart is
+  // the single source of truth -- no separate "did I just add this" flag to keep in
+  // sync). Once a card's product has a quantity here, its own Add-to-cart button is
+  // replaced by the same quantity-stepper the cart panel uses (see the grid below), so
+  // the "yes, this is in your cart, and here's how many" answer lives on the card
+  // itself, not only in the sidebar.
+  const cartQuantityByProductId = useMemo(
+    () => Object.fromEntries(cart.items.map((item) => [item.productId, item.quantity])),
+    [cart.items]
+  );
 
   // Stock: fetched exactly once, on mount -- unlike products (below), it never needs
   // refetching just because a search or category narrows down which rows are showing.
@@ -407,13 +384,43 @@ export default function ProductsPage() {
                         at checkout regardless (StockController's reservation logic
                         doesn't trust what this card shows either way). */}
                     {isAdmin && <StockCount quantity={stockByProductId[product.id]} />}
-                    <button
-                      type="button"
-                      className={`btn-secondary product-card-add${justAddedIds.has(product.id) ? " product-card-add-confirmed" : ""}`}
-                      onClick={() => handleAddToCart(product)}
-                    >
-                      {justAddedIds.has(product.id) ? "✓ Added" : "Add to cart"}
-                    </button>
+                    {cartQuantityByProductId[product.id] ? (
+                      <div className="quantity-stepper product-card-stepper">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            cart.setQuantity(product.id, cartQuantityByProductId[product.id] - 1)
+                          }
+                          aria-label={`Decrease quantity of ${product.name}`}
+                        >
+                          &minus;
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          value={cartQuantityByProductId[product.id]}
+                          onChange={(e) => cart.setQuantity(product.id, Number(e.target.value))}
+                          aria-label={`Quantity of ${product.name}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            cart.setQuantity(product.id, cartQuantityByProductId[product.id] + 1)
+                          }
+                          aria-label={`Increase quantity of ${product.name}`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-secondary product-card-add"
+                        onClick={() => cart.addItem(product)}
+                      >
+                        Add to cart
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
