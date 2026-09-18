@@ -11,8 +11,15 @@ server:
 spring:
   application:
     name: payment-service
+  # Port defaults to 5433, not Postgres's usual 5432 -- same reasoning as Order/Inventory
+  # Service's identical default (see docker-compose.yml's postgres service comment): a
+  # native Postgres install can already own host port 5432 on this machine, and 5433 is
+  # where docker-compose.yml's container actually publishes. This service's own local
+  # default was missed when that fix landed for the other two, since it was never part
+  # of the Oracle-to-Postgres migration that motivated it -- found by actually trying to
+  # run this service locally, not by inspection.
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:paymentdb}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:paymentdb}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
