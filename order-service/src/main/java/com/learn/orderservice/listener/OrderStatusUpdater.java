@@ -2,9 +2,11 @@ package com.learn.orderservice.listener;
 
 import com.learn.orderservice.entity.Order;
 import com.learn.orderservice.entity.OrderStatus;
+import com.learn.orderservice.event.OrderStatusChanged;
 import com.learn.orderservice.repository.OrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 // Shared by every listener that reacts to some other service's verdict on an order --
@@ -22,9 +24,11 @@ public class OrderStatusUpdater {
     private static final Logger log = LoggerFactory.getLogger(OrderStatusUpdater.class);
 
     private final OrderRepository orderRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
-    public OrderStatusUpdater(OrderRepository orderRepository) {
+    public OrderStatusUpdater(OrderRepository orderRepository, ApplicationEventPublisher applicationEventPublisher) {
         this.orderRepository = orderRepository;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
     // customerReason is what actually gets persisted and returned by the API -- plain
@@ -59,5 +63,10 @@ public class OrderStatusUpdater {
         } else {
             log.info("Order {} confirmed", orderId);
         }
+        // Same AFTER_COMMIT-deferred pattern as OutboxEventCreated -- see
+        // OrderStatusEmailListener. Raised here, inside the same transaction that's about
+        // to commit the status change, but the actual email send only happens once that
+        // commit has genuinely gone through.
+        applicationEventPublisher.publishEvent(new OrderStatusChanged(orderId));
     }
 }

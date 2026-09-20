@@ -4,6 +4,7 @@ import com.learn.orderservice.dto.CreateOrderRequest;
 import com.learn.orderservice.dto.OrderResponse;
 import com.learn.orderservice.entity.*;
 import com.learn.orderservice.event.OutboxEventCreated;
+import com.learn.orderservice.event.OrderStatusChanged;
 import com.learn.orderservice.exception.ForbiddenException;
 import com.learn.orderservice.exception.InvalidOrderStateException;
 import com.learn.orderservice.repository.*;
@@ -218,6 +219,11 @@ public class OrderController {
         // Same event-driven publish as createOrder -- cancellation writes an outbox row
         // through the exact same mechanism, so it gets the exact same fast path.
         applicationEventPublisher.publishEvent(new OutboxEventCreated(outboxEvent.getId()));
+        // Same AFTER_COMMIT-deferred email notification as OrderStatusUpdater's own
+        // CONFIRMED/REJECTED outcomes -- see OrderStatusEmailListener. This is the one
+        // status transition OrderStatusUpdater itself never sees (cancellation is
+        // customer-initiated, handled entirely here), so it needs its own publish.
+        applicationEventPublisher.publishEvent(new OrderStatusChanged(order.getId()));
 
         return ResponseEntity.ok(OrderResponse.from(order));
     }

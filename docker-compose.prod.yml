@@ -105,6 +105,11 @@ services:
       DB_PASSWORD: ${RDS_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       JAVA_OPTS: "-Xmx140m"
+      # Order status notification emails (OrderNotificationEmailService). Not a secret --
+      # it's a verified SES sender identity, same "safe to hardcode" reasoning as
+      # COGNITO_CLIENT_ID below. Currently in SES sandbox mode: only verified recipient
+      # addresses actually receive anything until AWS approves production access.
+      NOTIFICATIONS_FROM_EMAIL: ramesh97908@gmail.com
     ports:
       - "8081:8081"
     restart: unless-stopped

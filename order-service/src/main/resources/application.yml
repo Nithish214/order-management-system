@@ -55,6 +55,15 @@ products:
   image-bucket: ${PRODUCT_IMAGE_BUCKET:order-management-frontend-244689414185}
   image-cdn-domain: ${PRODUCT_IMAGE_CDN_DOMAIN:dgzc0rv8gh9y.cloudfront.net}
 
+# Backs OrderNotificationEmailService (order status change emails via SES). Empty
+# default, deliberately -- local dev has no SES identity to send from at all, and
+# requiring one just to start the service for unrelated work would be a worse default
+# than what actually happens instead: OrderNotificationEmailService treats a blank value
+# as "notifications disabled" and skips sending (logging once), rather than either
+# failing to start or throwing a confusing SES error on every single order.
+notifications:
+  from-email: ${NOTIFICATIONS_FROM_EMAIL:}
+
 logging:
   level:
     org.hibernate.SQL: INFO
