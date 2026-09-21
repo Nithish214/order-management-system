@@ -14,6 +14,13 @@
   margin: var(--space-3) 0 var(--space-4);
 }
 
+.history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
 .history-list {
   list-style: none;
   margin: 0;

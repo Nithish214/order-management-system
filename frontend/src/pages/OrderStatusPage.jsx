@@ -5,6 +5,7 @@ import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import AppHeader from "../components/AppHeader";
 import Spinner from "../components/Spinner";
+import ErrorState from "../components/ErrorState";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./OrderStatusPage.css";
 
@@ -32,12 +33,20 @@ export default function OrderStatusPage() {
   // and this banner should only ever show for the one page load right after checkout, not
   // reappear every time the poll tick happens to re-render this component.
   const [justPlaced, setJustPlaced] = useState(() => Boolean(location.state?.justPlaced));
+  // Bumped by the "Try again" button in the fatal-error state below -- included in the
+  // polling effect's dependency array purely as a re-run trigger, its actual value is
+  // never read for anything.
+  const [retryCount, setRetryCount] = useState(0);
 
   useDocumentTitle(order ? `Order #${order.id}` : "Order status");
 
   useEffect(() => {
     let intervalId;
     let cancelled = false;
+    // Clears whatever error a previous attempt left behind -- without this, retrying
+    // after a failure would only ever clear it once poll() itself succeeds, leaving the
+    // old error message on screen throughout that entire first retry request.
+    setError(null);
 
     async function poll() {
       try {
@@ -84,7 +93,7 @@ export default function OrderStatusPage() {
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [id, apiFetch]);
+  }, [id, apiFetch, retryCount]);
 
   // Optimistic + reconciled: flips the button/status immediately on success rather than
   // waiting for the next 3s poll tick to notice, same reasoning as the backend itself
@@ -121,7 +130,9 @@ export default function OrderStatusPage() {
     return (
       <>
         <AppHeader />
-        <p className="text-error">{error}</p>
+        <div className="status-page">
+          <ErrorState message={error} onRetry={() => setRetryCount((c) => c + 1)} />
+        </div>
       </>
     );
   }

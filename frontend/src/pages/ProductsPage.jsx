@@ -40,6 +40,9 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Bumped by the products-error "Try again" link further down -- included in the
+  // products effect's dependency array purely as a re-run trigger.
+  const [retryCount, setRetryCount] = useState(0);
   // What's actually in the search box right now, updated on every keystroke.
   const [searchQuery, setSearchQuery] = useState("");
   // What the product-fetching effect below actually reacts to -- deliberately NOT the
@@ -195,6 +198,7 @@ export default function ProductsPage() {
       } else {
         setSearching(true);
       }
+      setError(null);
       try {
         // 100 matches ProductController's own DEFAULT_PAGE_SIZE -- passed explicitly
         // rather than relying on that default so this stays correct even if the
@@ -248,7 +252,7 @@ export default function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, debouncedQuery, selectedCategory, page, sort]);
+  }, [apiFetch, debouncedQuery, selectedCategory, page, sort, retryCount]);
 
   function handleSearchChange(value) {
     setSearchQuery(value);
@@ -321,7 +325,18 @@ export default function ProductsPage() {
           )}
         </div>
 
-        {error && <p className="text-error page-error">{error}</p>}
+        {/* Inline, not a full-page replacement -- the search box and category sidebar
+            (already rendered above/beside this) stay usable even while the products
+            themselves failed to load, so switching category/search is itself often a
+            valid way to recover, alongside the explicit retry link. */}
+        {error && (
+          <p className="text-error page-error">
+            {error}{" "}
+            <button type="button" className="inline-retry" onClick={() => setRetryCount((c) => c + 1)}>
+              Try again
+            </button>
+          </p>
+        )}
 
         <div className="products-layout">
           {/* A left column on wide screens, a horizontal scrollable bar above the grid

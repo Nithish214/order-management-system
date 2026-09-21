@@ -6,6 +6,7 @@ import { friendlyErrorMessage } from "../utils/errors";
 import StatusBadge from "../components/StatusBadge";
 import AppHeader from "../components/AppHeader";
 import Spinner from "../components/Spinner";
+import ErrorState from "../components/ErrorState";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./OrderHistoryPage.css";
 
@@ -16,11 +17,16 @@ export default function OrderHistoryPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Bumped by the "Try again" button in the error state below -- included in the load
+  // effect's dependency array purely as a re-run trigger.
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadOrders() {
+      setLoading(true);
+      setError(null);
       try {
         // No user ID here at all -- the backend derives "whose orders" from the caller's
         // own Cognito token (the same X-User-Sub header pattern as placing an order),
@@ -48,7 +54,7 @@ export default function OrderHistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiFetch]);
+  }, [apiFetch, retryCount]);
 
   if (loading) {
     return (
@@ -67,7 +73,7 @@ export default function OrderHistoryPage() {
       <>
         <AppHeader />
         <div className="history-page">
-          <p className="text-error">{error}</p>
+          <ErrorState message={error} onRetry={() => setRetryCount((c) => c + 1)} />
         </div>
       </>
     );
@@ -85,7 +91,12 @@ export default function OrderHistoryPage() {
         <h1>Order history</h1>
 
         {orders.length === 0 ? (
-          <p className="text-muted">No orders yet.</p>
+          <div className="history-empty">
+            <p className="text-muted">No orders yet.</p>
+            <Link to="/" className="btn-secondary">
+              Browse products
+            </Link>
+          </div>
         ) : (
           <ul className="history-list">
             {orders.map((order) => (

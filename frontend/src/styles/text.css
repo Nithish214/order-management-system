@@ -40,3 +40,16 @@
   align-items: center;
   gap: var(--space-2);
 }
+
+/* A plain <button> styled to read as an inline text link -- for a retry action sitting
+   inside a sentence (ProductsPage's inline product-load error) rather than its own
+   separate control, the same "looks like a link, is actually a button" treatment
+   .cart-remove already uses for its own inline text action. */
+.inline-retry {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+}

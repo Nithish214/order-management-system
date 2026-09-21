@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { useAuth } from "../auth/AuthContext";
 import { useCart } from "./CartContext";
@@ -99,7 +99,12 @@ export default function CartSummary() {
       {error && <p className="text-error page-error">{error}</p>}
 
       {cart.items.length === 0 ? (
-        <p className="text-muted">Cart is empty.</p>
+        <div className="cart-empty">
+          <p className="text-muted">Cart is empty.</p>
+          <Link to="/" className="btn-secondary">
+            Browse products
+          </Link>
+        </div>
       ) : (
         <>
           <ul className="cart-items">

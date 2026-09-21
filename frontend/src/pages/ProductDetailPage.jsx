@@ -10,6 +10,7 @@ import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
 import Spinner from "../components/Spinner";
 import AppHeader from "../components/AppHeader";
+import ErrorState from "../components/ErrorState";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./ProductDetailPage.css";
 
@@ -53,6 +54,10 @@ export default function ProductDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [restockInput, setRestockInput] = useState("");
   const [restocking, setRestocking] = useState(false);
+  // Bumped by the "Try again" button in the fatal-error state below -- included in the
+  // load effect's dependency array purely as a re-run trigger, its actual value is never
+  // read for anything.
+  const [retryCount, setRetryCount] = useState(0);
 
   useDocumentTitle(product ? product.name : loading ? "Loading product..." : "Product not found");
 
@@ -60,6 +65,8 @@ export default function ProductDetailPage() {
     let cancelled = false;
 
     async function loadProduct() {
+      setLoading(true);
+      setError(null);
       try {
         // Two independent services -- Order Service owns the product itself, Inventory
         // Service owns its live stock. A stock lookup failure (e.g. no stock record for
@@ -95,7 +102,7 @@ export default function ProductDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, apiFetch, isAdmin]);
+  }, [id, apiFetch, isAdmin, retryCount]);
 
   function handleAddToCart() {
     cart.addItem(product, quantity);
@@ -230,12 +237,7 @@ export default function ProductDetailPage() {
       <>
         <AppHeader />
         <div className="detail-page">
-          <p>
-            <Link to="/" className="back-link">
-              &larr; Back to products
-            </Link>
-          </p>
-          <p className="text-error page-error">{error}</p>
+          <ErrorState message={error} onRetry={() => setRetryCount((c) => c + 1)} />
         </div>
       </>
     );

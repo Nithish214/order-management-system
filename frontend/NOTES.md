@@ -67,3 +67,46 @@ order status page for that one page load — auto-fades after 5s, also dismissab
 respects `prefers-reduced-motion`. Captured once into local state on mount rather than
 read fresh on every render, so it doesn't reappear on the page's own 3s status-polling
 re-renders.
+
+## Section 4: Every page, no exceptions
+
+**Loading states**: already fully covered (the `Spinner` component, wired into every
+page and action button in an earlier session) — no changes needed.
+
+**Error states — the single biggest real gap found in this pass**: every page-level
+error was a bare paragraph of red text with no way to recover except a manual browser
+reload — worse, on the order status page, a fatal error permanently `clearInterval`'d
+its own polling with no way to ever resume short of navigating away and back. Added:
+- `components/ErrorState.jsx` — one consistent "message + Try again + Back to products"
+  shape, used on `ProductDetailPage`, `OrderStatusPage`, and `OrderHistoryPage`'s fatal
+  (nothing else to show) error states.
+- A `retryCount` state + dependency-array trigger pattern on each of those pages' load
+  effects, plus `ProductsPage`'s own products-fetch effect (which degrades gracefully
+  already — the search box and category sidebar stay usable even while products failed
+  to load — so it gets a small inline "Try again" next to the error text instead of the
+  full `ErrorState` replacing the whole page).
+- Fixed a real correctness bug while doing this: none of these effects cleared their own
+  `error`/`loading` state at the *start* of a (re)load — meaning a successful retry after
+  a failure would leave the old error message on screen (or, on `ProductDetailPage`,
+  never clear `loading` correctly) until the new request's own `finally` block ran.
+
+**Empty states**: `CartSummary`'s "Cart is empty" and `OrderHistoryPage`'s "No orders
+yet" both now include a "Browse products" link — previously dead ends with nothing to
+click. `ProductsPage`'s three empty-search/category/catalog messages were already
+distinct and clear (no dead end there — the search box and category sidebar are right
+there to change).
+
+**Responsive**: reviewed every page's CSS rather than rewriting anything — the app
+already uses `flex-wrap`, `max-width` (never a fixed `width` past mobile viewport
+widths), and `aspect-ratio` consistently, with narrow-screen media queries already in
+place for the category sidebar and product detail gallery. Nothing found that would
+cause horizontal overflow or a broken layout at a phone width. No changes made here.
+
+**No console errors/warnings**: reviewed every list render for a real, unique `key`
+(all correct), checked for conditional hook calls (none — every `useDocumentTitle` call
+happens unconditionally before any early return), and confirmed `npm run build`/`npm run
+lint` stay clean throughout this entire pass. **Caveat, stated plainly**: I don't have a
+browser available in this environment, so I could not literally open the app and watch
+its live console. Everything above is a careful code-level review, not a substitute for
+actually clicking through the flow yourself before merging — please do that specific
+check as part of your review.
