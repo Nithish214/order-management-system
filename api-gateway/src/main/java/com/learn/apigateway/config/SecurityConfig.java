@@ -97,6 +97,11 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/products/*/image-upload-url").hasAuthority("ROLE_admin")
                         .pathMatchers(HttpMethod.POST, "/products/*/images").hasAuthority("ROLE_admin")
                         .pathMatchers(HttpMethod.DELETE, "/products/*/images/*").hasAuthority("ROLE_admin")
+                        // Same admin-only reasoning, same three-rule shape, for the one
+                        // optional product video (ProductVideoUploadService/Product#videoUrl).
+                        .pathMatchers(HttpMethod.POST, "/products/*/video-upload-url").hasAuthority("ROLE_admin")
+                        .pathMatchers(HttpMethod.PUT, "/products/*/video").hasAuthority("ROLE_admin")
+                        .pathMatchers(HttpMethod.DELETE, "/products/*/video").hasAuthority("ROLE_admin")
                         // Every other route just needs any validly-signed, unexpired token.
                         .anyExchange().authenticated()
                 )

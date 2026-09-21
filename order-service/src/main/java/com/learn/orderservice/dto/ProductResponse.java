@@ -28,6 +28,10 @@ public class ProductResponse {
     // images.get(0) (when present) is this product's cover/thumbnail image everywhere a
     // single image is shown (the product list row, cart) -- see Product entity's comment.
     private List<ProductImageResponse> images;
+    // Null for any product without an uploaded video -- omitted from the JSON entirely
+    // (see the class's NON_NULL setting above), same "absent means none" convention as
+    // sku being redacted, rather than a literal "videoUrl": null.
+    private String videoUrl;
 
     // Includes sku -- safe default for callers that are already guaranteed admin-only by
     // SecurityConfig (addProductImage, deleteProductImage), unlike the three read
@@ -51,6 +55,7 @@ public class ProductResponse {
         response.setUnitPrice(product.getUnitPrice());
         response.setCategory(product.getCategory());
         response.setImages(product.getImages().stream().map(ProductImageResponse::from).toList());
+        response.setVideoUrl(product.getVideoUrl());
         return response;
     }
 }

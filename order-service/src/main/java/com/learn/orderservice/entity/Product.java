@@ -59,4 +59,11 @@ public class Product {
     @OrderBy("id ASC")
     @BatchSize(size = 100)
     private List<ProductImage> images = new ArrayList<>();
+
+    // Null until an admin uploads one -- unlike images, just one per product (a single
+    // demo/showcase clip, not a gallery), so a new upload replaces this value outright
+    // rather than appending to a collection (see ProductVideoUploadService/
+    // ProductController's PUT .../video).
+    @Column(name = "video_url", length = 500)
+    private String videoUrl;
 }

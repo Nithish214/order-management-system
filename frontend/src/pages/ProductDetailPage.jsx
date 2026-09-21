@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { addProductImage, deleteProductImage } from "../api/productImages";
+import { setProductVideo, deleteProductVideo } from "../api/productVideos";
 import { useCart } from "../cart/CartContext";
 import { useCurrency } from "../currency/CurrencyContext";
 import { useAuth } from "../auth/AuthContext";
@@ -17,6 +18,10 @@ const ACCEPTED_IMAGE_TYPES = "image/jpeg,image/png,image/webp";
 // same reasoning as ProductsPage's copy of this constant.
 const MAX_IMAGES_PER_PRODUCT = 6;
 
+// Kept in sync with ProductVideoUploadService's own allowlist -- just the two formats
+// every modern browser plays natively with a plain <video> tag.
+const ACCEPTED_VIDEO_TYPES = "video/mp4,video/webm";
+
 export default function ProductDetailPage() {
   const { id } = useParams();
   const apiFetch = useApiFetch();
@@ -24,6 +29,7 @@ export default function ProductDetailPage() {
   const { formatPrice } = useCurrency();
   const { isAdmin } = useAuth();
   const fileInputRef = useRef(null);
+  const videoFileInputRef = useRef(null);
 
   const [product, setProduct] = useState(null);
   // Undefined until the /stock fetch resolves, distinct from null/0 -- StockCount treats
@@ -36,6 +42,8 @@ export default function ProductDetailPage() {
   const [added, setAdded] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingImageId, setDeletingImageId] = useState(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [deletingVideo, setDeletingVideo] = useState(false);
   // Which of this product's images is shown large -- an index rather than an id so it
   // stays meaningful (falls back to the new first image) even right after the currently
   // selected image itself is deleted, see handleDeleteImage.
@@ -125,6 +133,36 @@ export default function ProductDetailPage() {
       setError(friendlyErrorMessage(err));
     } finally {
       setDeletingImageId(null);
+    }
+  }
+
+  async function handleVideoFileSelected(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setUploadingVideo(true);
+    setError(null);
+    try {
+      const updated = await setProductVideo(apiFetch, product.id, file);
+      setProduct(updated);
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setUploadingVideo(false);
+    }
+  }
+
+  async function handleDeleteVideo() {
+    setDeletingVideo(true);
+    setError(null);
+    try {
+      const updated = await deleteProductVideo(apiFetch, product.id);
+      setProduct(updated);
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setDeletingVideo(false);
     }
   }
 
@@ -233,6 +271,43 @@ export default function ProductDetailPage() {
                   ? "Removing..."
                   : "Remove this image"}
               </button>
+            </div>
+          )}
+
+          {/* Visible to every visitor, not just admins -- a demo/showcase clip is
+              product media the same way images are; only uploading/removing it is an
+              admin action (see the upload controls below). */}
+          {product.videoUrl && (
+            <video className="detail-video" src={product.videoUrl} controls />
+          )}
+
+          {isAdmin && (
+            <div className="detail-video-admin">
+              <input
+                type="file"
+                accept={ACCEPTED_VIDEO_TYPES}
+                ref={videoFileInputRef}
+                onChange={handleVideoFileSelected}
+                hidden
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => videoFileInputRef.current?.click()}
+                disabled={uploadingVideo}
+              >
+                {uploadingVideo ? "Uploading..." : product.videoUrl ? "Replace video" : "Upload video"}
+              </button>
+              {product.videoUrl && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={handleDeleteVideo}
+                  disabled={deletingVideo}
+                >
+                  {deletingVideo ? "Removing..." : "Remove video"}
+                </button>
+              )}
             </div>
           )}
         </div>

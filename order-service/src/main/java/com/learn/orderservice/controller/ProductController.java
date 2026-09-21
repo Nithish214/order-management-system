@@ -6,11 +6,15 @@ import com.learn.orderservice.dto.ImageUploadUrlRequest;
 import com.learn.orderservice.dto.ImageUploadUrlResponse;
 import com.learn.orderservice.dto.PagedResponse;
 import com.learn.orderservice.dto.ProductResponse;
+import com.learn.orderservice.dto.SetProductVideoRequest;
+import com.learn.orderservice.dto.VideoUploadUrlRequest;
+import com.learn.orderservice.dto.VideoUploadUrlResponse;
 import com.learn.orderservice.entity.Product;
 import com.learn.orderservice.entity.ProductImage;
 import com.learn.orderservice.repository.ProductImageRepository;
 import com.learn.orderservice.repository.ProductRepository;
 import com.learn.orderservice.service.ProductImageUploadService;
+import com.learn.orderservice.service.ProductVideoUploadService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -24,6 +28,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,15 +65,18 @@ public class ProductController {
     private final ProductRepository productRepository;
     private final ProductImageRepository productImageRepository;
     private final ProductImageUploadService productImageUploadService;
+    private final ProductVideoUploadService productVideoUploadService;
 
     public ProductController(
             ProductRepository productRepository,
             ProductImageRepository productImageRepository,
-            ProductImageUploadService productImageUploadService
+            ProductImageUploadService productImageUploadService,
+            ProductVideoUploadService productVideoUploadService
     ) {
         this.productRepository = productRepository;
         this.productImageRepository = productImageRepository;
         this.productImageUploadService = productImageUploadService;
+        this.productVideoUploadService = productVideoUploadService;
     }
 
     // Optional ?category= filters to one category; omitted (or blank) returns everything,
@@ -321,6 +329,49 @@ public class ProductController {
         // the collection is what actually issues the DELETE at flush time.
         product.getImages().remove(image);
         productImageUploadService.deleteIfManaged(image.getImageUrl());
+        return ResponseEntity.ok(ProductResponse.from(product));
+    }
+
+    // Step 1 of the video upload flow -- same two-step pattern as image-upload-url, no
+    // count-cap check needed since a product has at most one video (see Product#videoUrl).
+    @PostMapping("/{id}/video-upload-url")
+    public ResponseEntity<VideoUploadUrlResponse> createVideoUploadUrl(
+            @PathVariable Long id,
+            @Valid @RequestBody VideoUploadUrlRequest request
+    ) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found: " + id));
+        VideoUploadUrlResponse response = productVideoUploadService.createUploadUrl(product.getId(), request.getContentType());
+        return ResponseEntity.ok(response);
+    }
+
+    // Step 2: called only after the browser's direct PUT to S3 has already succeeded.
+    // PUT, not POST -- unlike images, this always replaces the single existing value
+    // (or sets it for the first time), never adds to a collection.
+    @PutMapping("/{id}/video")
+    @Transactional
+    public ResponseEntity<ProductResponse> setProductVideo(
+            @PathVariable Long id,
+            @Valid @RequestBody SetProductVideoRequest request
+    ) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found: " + id));
+        // Clean up whatever this is replacing (a no-op if there was none yet) before
+        // overwriting the field -- otherwise the old file would linger in S3 forever with
+        // nothing left pointing at it.
+        productVideoUploadService.deleteIfManaged(product.getVideoUrl());
+        product.setVideoUrl(request.getVideoUrl());
+        return ResponseEntity.ok(ProductResponse.from(product));
+    }
+
+    // Removes this product's video entirely, if it has one.
+    @DeleteMapping("/{id}/video")
+    @Transactional
+    public ResponseEntity<ProductResponse> deleteProductVideo(@PathVariable Long id) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found: " + id));
+        productVideoUploadService.deleteIfManaged(product.getVideoUrl());
+        product.setVideoUrl(null);
         return ResponseEntity.ok(ProductResponse.from(product));
     }
 }
