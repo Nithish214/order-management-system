@@ -218,10 +218,14 @@ EOF
             }
         }
 
-        // --exclude "product-images/*" is not optional -- see deploy-frontend.ps1's own
-        // comment on this exact flag for why: dist/ never contains admin-uploaded product
-        // photos, and --delete syncing without this exclusion previously wiped every one
-        // of them in production.
+        // --exclude "product-images/*" AND "product-videos/*" are not optional -- see
+        // deploy-frontend.ps1's own comment on this exact flag for why: dist/ never
+        // contains admin-uploaded product photos or videos, and --delete syncing without
+        // excluding a prefix wipes every file under it in production. Learned this the
+        // hard way twice now: once for product-images/ (fixed then), and again for
+        // product-videos/ when it shipped without being added to this same exclusion --
+        // an admin's uploaded video was silently deleted by the very next frontend
+        // deploy, even though nothing about that deploy touched video code at all.
         //
         // Runs the AWS CLI directly (installed on the Jenkins image -- see
         // jenkins/Dockerfile), not via an ephemeral container bind-mounting dist/ -- same
@@ -236,7 +240,7 @@ EOF
                     passwordVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
                     sh '''
-                        aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" --delete --exclude "product-images/*"
+                        aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" --delete --exclude "product-images/*" --exclude "product-videos/*"
                         aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
                     '''
                 }
