@@ -58,6 +58,16 @@ spring:
                 name: order-service-cb
                 fallbackUri: forward:/fallback/order-service
 
+        - id: order-service-cart
+          uri: ${order.service.url:http://localhost:8081}
+          predicates:
+            - Path=/cart/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: order-service-cb
+                fallbackUri: forward:/fallback/order-service
+
         - id: inventory-service-stock-read
           uri: ${inventory.service.url:http://localhost:8082}
           predicates:
