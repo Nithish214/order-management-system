@@ -40,3 +40,15 @@ and now the branding) with no way back except the browser's own back button or t
 page's own small "← Back to products" link. Fixed by wrapping all three of its render
 paths (loading, fatal error, and the real product view) in `<AppHeader />`, consistent
 with every other page.
+
+## Section 2: Navigation & browsing
+
+Category sidebar's active-state (color + bold) and the working debounced search/category
+browsing were already solid — no changes needed there. The cart icon (a real glyph, not
+just the word "Cart") was added as part of Section 1's `AppHeader` work.
+
+**Product card hover state**: cards had no hover treatment at all beyond the product
+name underlining — added a border-color transition to the accent color on hover
+(`ProductsPage.css`), consistent with this design's own "borders over shadows" structure
+principle (see `tokens.css`'s comment on that) rather than introducing the one drop
+shadow anywhere in the app. Respects `prefers-reduced-motion`.

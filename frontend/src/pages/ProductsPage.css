@@ -167,6 +167,14 @@
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface);
+  /* border-color, not a shadow -- this design deliberately uses borders over shadows for
+     structure/hierarchy (see tokens.css's own comment), so the hover state stays
+     consistent with that rather than introducing the one shadow anywhere in the app. */
+  transition: border-color 0.15s ease;
+}
+
+.product-card:hover {
+  border-color: var(--color-accent);
 }
 
 .product-card-link {
@@ -179,6 +187,12 @@
 
 .product-card-link:hover .product-card-name {
   text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card {
+    transition: none;
+  }
 }
 
 .product-card-thumb {
