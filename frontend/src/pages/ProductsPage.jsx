@@ -70,13 +70,20 @@ export default function ProductsPage() {
   // than translating back and forth -- only the *display* ("Page 1 of 4") adds 1.
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  // "featured" matches ProductController's own default -- the same stable id-ascending
-  // order pagination already needs for correctness (see that controller's comment), not
-  // a separate concept. Only meaningful while browsing/category-filtering: an actual
-  // keyword search always stays ranked by relevance server-side regardless of this value
-  // (see resolveSort's comment), so the dropdown for it is hidden below while
-  // debouncedQuery is set, rather than offering a control that would silently do nothing.
+  // Client-side now, not sent to the backend at all -- see the visibleProducts useMemo
+  // below. "featured" means "whatever order the server already returned" (id-ascending),
+  // not a reorder of its own. Only meaningful while browsing/category-filtering: an
+  // actual keyword search always stays ranked by relevance server-side, so the dropdown
+  // for it is hidden below while debouncedQuery is set, same as before -- re-sorting a
+  // relevance-ranked search result by price would throw away the one thing search itself
+  // is for.
   const [sort, setSort] = useState("featured");
+  // Both plain strings (not numbers) so an empty input reads as "no bound" without a
+  // separate null/undefined case to juggle -- see visibleProducts below for how they're
+  // parsed. Also client-side only, same reasoning as sort.
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const hasActiveSortOrFilter = sort !== "featured" || minPrice !== "" || maxPrice !== "";
 
   useDocumentTitle(debouncedQuery ? `Search: "${debouncedQuery}"` : selectedCategory || "Products");
 
@@ -90,6 +97,49 @@ export default function ProductsPage() {
     () => Object.fromEntries(cart.items.map((item) => [item.productId, item.quantity])),
     [cart.items]
   );
+
+  // Sort and price-filter, both applied entirely client-side to whatever page of
+  // products the server already returned -- no new request for either. That does mean
+  // both only ever act on the CURRENT page, not the whole category if it spans more than
+  // one (see NOTES.md: correctly sorting/filtering an entire multi-page category would
+  // need the backend's own search/list endpoints to accept a price range and a client
+  // sort key, which is out of scope for a frontend-only pass).
+  const visibleProducts = useMemo(() => {
+    const min = minPrice === "" ? null : Number(minPrice);
+    const max = maxPrice === "" ? null : Number(maxPrice);
+    const filtered = products.filter((product) => {
+      if (min !== null && !Number.isNaN(min) && product.unitPrice < min) return false;
+      if (max !== null && !Number.isNaN(max) && product.unitPrice > max) return false;
+      return true;
+    });
+
+    // .slice() first -- Array#sort mutates in place, and `products` (the effect's own
+    // fetched state) must never be touched directly, or the "featured" (server) order
+    // would be permanently lost the moment someone picked a different sort once.
+    switch (sort) {
+      case "price_asc":
+        return filtered.slice().sort((a, b) => a.unitPrice - b.unitPrice);
+      case "price_desc":
+        return filtered.slice().sort((a, b) => b.unitPrice - a.unitPrice);
+      case "name_asc":
+        return filtered.slice().sort((a, b) => a.name.localeCompare(b.name));
+      // No real createdAt field reaches the frontend at all, but id is assigned in
+      // insertion order, so descending-id is exactly "most recently added" without
+      // needing one -- see NOTES.md for why this is a legitimate client-side stand-in,
+      // not a guess.
+      case "newest":
+        return filtered.slice().sort((a, b) => b.id - a.id);
+      case "featured":
+      default:
+        return filtered;
+    }
+  }, [products, sort, minPrice, maxPrice]);
+
+  function handleResetSortAndFilter() {
+    setSort("featured");
+    setMinPrice("");
+    setMaxPrice("");
+  }
 
   // Stock: fetched exactly once, on mount -- unlike products (below), it never needs
   // refetching just because a search or category narrows down which rows are showing.
@@ -178,7 +228,7 @@ export default function ProductsPage() {
   // exactly which handler caused it.
   useEffect(() => {
     setPage(0);
-  }, [debouncedQuery, selectedCategory, sort]);
+  }, [debouncedQuery, selectedCategory]);
 
   // Products: re-fetched whenever debouncedQuery, selectedCategory, or page changes. A
   // search takes priority over a category selection when both happen to be set --
@@ -202,8 +252,10 @@ export default function ProductsPage() {
       try {
         // 100 matches ProductController's own DEFAULT_PAGE_SIZE -- passed explicitly
         // rather than relying on that default so this stays correct even if the
-        // backend's default ever changes independently.
-        const params = new URLSearchParams({ page: String(page), size: "100", sort });
+        // backend's default ever changes independently. No `sort` param here anymore --
+        // sort is applied entirely client-side now (see visibleProducts), so every fetch
+        // just uses the server's own stable default (id-ascending) order.
+        const params = new URLSearchParams({ page: String(page), size: "100" });
         let path;
         if (debouncedQuery) {
           params.set("q", debouncedQuery);
@@ -252,7 +304,7 @@ export default function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, debouncedQuery, selectedCategory, page, sort, retryCount]);
+  }, [apiFetch, debouncedQuery, selectedCategory, page, retryCount]);
 
   function handleSearchChange(value) {
     setSearchQuery(value);
@@ -308,20 +360,63 @@ export default function ProductsPage() {
           />
 
           {/* Hidden during an actual keyword search, not just disabled -- a real search
-              always stays ranked by relevance server-side (see ProductController's
-              buildPageable/resolveSort comments), so showing this control while
-              searching would offer a choice that silently does nothing. */}
+              always stays ranked by relevance server-side, so re-sorting or price-
+              filtering its results here would throw away the one thing search is
+              actually for. Both are purely client-side now (see visibleProducts) --
+              picking either never triggers a new request. */}
           {!debouncedQuery && (
-            <label className="product-sort-control">
-              Sort by
-              <select value={sort} onChange={(e) => setSort(e.target.value)}>
-                <option value="featured">Featured</option>
-                <option value="price_asc">Price: Low to High</option>
-                <option value="price_desc">Price: High to Low</option>
-                <option value="newest">Newest</option>
-                <option value="name_asc">Name: A-Z</option>
-              </select>
-            </label>
+            <>
+              <label className="product-sort-control">
+                Sort by
+                <select
+                  className={sort !== "featured" ? "control-active" : undefined}
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                >
+                  <option value="featured">Featured</option>
+                  <option value="price_asc">Price: Low to High</option>
+                  <option value="price_desc">Price: High to Low</option>
+                  <option value="newest">Newest</option>
+                  <option value="name_asc">Name: A-Z</option>
+                </select>
+              </label>
+
+              <div className="price-filter">
+                <label>
+                  Min
+                  <input
+                    type="number"
+                    min="0"
+                    inputMode="decimal"
+                    className={minPrice !== "" ? "control-active" : undefined}
+                    placeholder="$0"
+                    value={minPrice}
+                    onChange={(e) => setMinPrice(e.target.value)}
+                    aria-label="Minimum price (USD)"
+                  />
+                </label>
+                <span aria-hidden="true">&ndash;</span>
+                <label>
+                  Max
+                  <input
+                    type="number"
+                    min="0"
+                    inputMode="decimal"
+                    className={maxPrice !== "" ? "control-active" : undefined}
+                    placeholder="Any"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    aria-label="Maximum price (USD)"
+                  />
+                </label>
+              </div>
+
+              {hasActiveSortOrFilter && (
+                <button type="button" className="inline-retry" onClick={handleResetSortAndFilter}>
+                  Reset
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -375,10 +470,11 @@ export default function ProductsPage() {
           </aside>
 
           <section className="product-grid-section">
-            {/* Three genuinely different messages, not the same text reused -- an empty
-                catalog, "your search matched nothing," and "this category has no
-                products" are three different situations, and conflating them would
-                mislead whichever one is actually happening. */}
+            {/* Several genuinely different messages, not the same text reused -- an
+                empty catalog, "your search matched nothing," "this category has no
+                products," and "the price filter excluded everything on this page" are
+                all different situations, and conflating them would mislead whichever
+                one is actually happening. */}
             {searching && (
               <p className="text-muted loading-row">
                 <Spinner /> Loading...
@@ -393,9 +489,17 @@ export default function ProductsPage() {
                     : "No products available right now."}
               </p>
             )}
-            {!searching && products.length > 0 && (
+            {!searching && products.length > 0 && visibleProducts.length === 0 && (
+              <p className="text-muted">
+                No products in this price range.{" "}
+                <button type="button" className="inline-retry" onClick={handleResetSortAndFilter}>
+                  Reset filter
+                </button>
+              </p>
+            )}
+            {!searching && visibleProducts.length > 0 && (
               <div className="product-grid">
-                {products.map((product) => (
+                {visibleProducts.map((product) => (
                   <div className="product-card" key={product.id}>
                     <Link to={`/products/${product.id}`} className="product-card-link">
                       <div className="product-card-thumb">

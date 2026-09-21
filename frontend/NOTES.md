@@ -189,3 +189,49 @@ change it would take.
 3. Resize the window down to a phone width and confirm it feels right — the existing
    `flex-wrap`/`max-width` patterns looked sound in review, but I couldn't visually
    confirm the result.
+
+---
+
+# Round 2 (branch: frontend-polish-2)
+
+Continuing on a new branch, building pure-frontend features on top of everything above.
+Working through each step, stopping after each for review, per the instructions for
+this round.
+
+## Step 1: Sort + filter on the product grid
+
+**What changed**: `ProductsPage`'s existing sort dropdown (Featured / Price low-high /
+Price high-low / Newest / Name A-Z) used to send a `sort` query param to the backend and
+trigger a fresh fetch on every change. It's now applied **entirely client-side**, to
+whatever page of products is already loaded — picking a different sort no longer
+touches the network at all. Added a min/max price range filter (two plain number
+inputs, USD) alongside it, combining correctly with sort and with the existing category
+selection (both operate on the same already-fetched list). A "Reset" action appears
+only when a non-default sort or price filter is actually active, clearing both at once.
+
+**"Newest" without a real date field**: `ProductResponse` never sends a `createdAt` to
+the frontend — but `id` is assigned in insertion order, so sorting by `id` descending is
+exactly "most recently added," client-side, with no backend change. Not a guess or a
+fake stand-in — the same ordering the backend's own "newest" sort was almost certainly
+already doing internally.
+
+**Visual treatment**: the sort `<select>` and both price inputs get an accent-colored
+border/text when they hold a non-default value — the same "accent color means currently
+applied" language `.category-link-active` already uses elsewhere on this exact page,
+not a new badge/pill invented for this. The "Reset" actions reuse the existing
+`.inline-retry` button-styled-as-a-link class from the earlier polish pass, for the same
+reason.
+
+**Flagging per rule 4, even though scoped correctly per your instructions**: because
+this only ever sorts/filters the *current page* (up to 100 products, this app's page
+size), a category with more than one page of results will only have sort/price-filter
+applied within whichever page you're currently viewing — paging to the next page shows
+that page in the server's own default order, unaffected by whatever sort/filter was
+active on the previous page. This matches exactly what was asked ("applied client-side
+to the already-fetched product list... no new API calls needed"), so I implemented it
+as specified rather than silently doing something bigger — but genuinely correct
+sorting/filtering across an ENTIRE multi-page category would need the backend's
+`/products` and `/products/search` endpoints to accept a price range, and to keep doing
+the sorting itself (the way the old server-side `sort` param already did) rather than
+the frontend re-sorting only what it happens to have in memory. Flagging this now so
+it's a known, visible tradeoff rather than something you discover from a bug report.

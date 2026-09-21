@@ -85,6 +85,48 @@
   border-color: var(--color-accent);
 }
 
+.price-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm-size);
+  color: var(--color-text-muted);
+}
+
+.price-filter label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.price-filter input {
+  /* Fits "$0"/a few digits without the arbitrary-feeling full 320px search-input width --
+     a price is never going to be that long. */
+  width: 72px;
+  padding: var(--space-1) var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-sm-size);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.price-filter input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+/* One shared signal for "this control currently has a non-default value applied" --
+   the same accent-color-on-an-otherwise-neutral-control language .category-link-active
+   already uses elsewhere on this exact page, not a new badge/pill invented just for
+   this. Applies to the sort <select> and both price inputs. */
+.control-active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .products-layout {
   display: flex;
   align-items: flex-start;
