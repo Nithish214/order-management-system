@@ -157,6 +157,20 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: var(--space-4);
+  /* Fades in on mount -- plays every time this grid appears (a category switch, a
+     search, a page change), same "settle in" idea as OrderStatusPage's outcome-enter,
+     so a new set of results doesn't just pop in instantly after replacing the loading
+     indicator. */
+  animation: product-grid-enter 0.25s ease;
+}
+
+@keyframes product-grid-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .product-card {
@@ -192,6 +206,10 @@
 @media (prefers-reduced-motion: reduce) {
   .product-card {
     transition: none;
+  }
+
+  .product-grid {
+    animation: none;
   }
 }
 

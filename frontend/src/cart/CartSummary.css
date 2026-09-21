@@ -31,6 +31,28 @@
 .cart-item {
   padding: var(--space-3) 0;
   border-bottom: var(--border-width) solid var(--color-border);
+  /* Plays once, when a genuinely NEW item mounts (React reconciles by productId --
+     see the key below -- so an existing item's quantity changing never remounts it,
+     and never replays this). Adding to cart should feel like something just landed
+     here, not an instant, silent list-length change. */
+  animation: cart-item-enter 0.25s ease;
+}
+
+@keyframes cart-item-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-item {
+    animation: none;
+  }
 }
 
 .cart-item:first-child {

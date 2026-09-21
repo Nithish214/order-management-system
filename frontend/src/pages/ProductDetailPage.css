@@ -106,10 +106,8 @@
   border-width: 2px;
 }
 
-.detail-thumb:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
-}
+/* Focus-visible ring: now the global rule in index.css -- removed the duplicate that
+   used to live here. */
 
 .detail-image-admin {
   display: flex;

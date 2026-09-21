@@ -26,16 +26,8 @@
   cursor: not-allowed;
 }
 
-/* :focus-visible (not :focus) -- shows the ring for keyboard navigation, which is exactly
-   who needs it, without adding one on every plain mouse click the way :focus alone would.
-   A box-shadow ring rather than the browser's default outline, so it's actually this
-   design's accent color, consistent with how input fields already show focus (a
-   border-color swap to the same color) instead of an unstyled, mismatched blue ring. */
-.btn-primary:focus-visible,
-.btn-secondary:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
-}
+/* Focus-visible ring: now a single global rule (index.css) covering every button/link
+   app-wide, not just these two -- removed the duplicate that used to live here. */
 
 .btn-secondary {
   display: inline-flex;

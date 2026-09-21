@@ -110,3 +110,82 @@ browser available in this environment, so I could not literally open the app and
 its live console. Everything above is a careful code-level review, not a substitute for
 actually clicking through the flow yourself before merging — please do that specific
 check as part of your review.
+
+## Section 5: Final details
+
+**Favicon and page titles**: done in Section 1, since they were tightly coupled to the
+branding work there (the default title and the favicon are effectively one "what does
+the browser tab look like" concern).
+
+**Transitions**: two added, both subtle, both respecting `prefers-reduced-motion`:
+- The product grid now fades in on mount (`product-grid-enter`) instead of popping in
+  instantly every time a category switch/search/page change finishes.
+- A newly-added cart item now fades and slides in slightly (`cart-item-enter`) instead of
+  silently appearing. Deliberately keyed so this only plays for a genuinely NEW item —
+  React reconciles existing items by `productId`, so an existing item's quantity
+  changing reuses the same DOM node and never replays this.
+
+**Consistent focus/hover states**: found the real inconsistency the checklist called
+out — `.category-link`, `.cart-remove`, `.history-order-link`, `.order-item-info`, the
+plain nav links, and several others had *no* focus-visible treatment at all, while
+`.btn-primary`/`.btn-secondary`/`.detail-thumb` each had their own separately-declared
+(but identical) one. Replaced all of that with a single global rule in `index.css`
+(`a:focus-visible, button:focus-visible`) covering every link and button in the app,
+including ones that never had a focus ring before, and removed the two now-redundant
+duplicates. Also swept every hardcoded color value in the codebase (`grep`) to confirm
+none were an inconsistency — all of them are the same deliberate "white text on a solid
+accent/status background" or "black video letterboxing" pattern already used
+consistently, not a page going its own way.
+
+---
+
+## Summary
+
+Everything in the checklist is genuinely done, with one exception logged below as
+blocked. Five commits, one per checklist section, each preceded by a clean
+`npm run build` and `npm run lint`.
+
+**Self-review pass**: walked the checklist item by item after finishing Section 5.
+Found one real gap: `NotFoundPage` had no branding at all (unlike the auth pages, which
+now show the plain `Logo` even without the full nav) — someone landing on a dead link
+would see a page that looked like it belonged to a different, unbranded site. Fixed by
+adding the same plain `Logo` there, consistent with the auth pages' pattern (still no
+full `AppHeader`/nav, deliberately, since this route is reachable while logged out —
+see that page's own comment).
+
+**What was built**: a real wordmark + favicon + dynamic page titles (there was none of
+this before); a login-first flow with actual storefront framing on both the login page
+and the immediate post-login landing, since a true pre-login public catalog isn't
+possible without a backend change; product card hover states; a genuine "Order placed!"
+confirmation moment instead of a silent redirect; a reusable `ErrorState` component with
+real retry, replacing five different dead-end error messages (one of which,
+`OrderStatusPage`, permanently stopped its own polling on any failure with no way to
+recover short of leaving and coming back); "browse products" CTAs on the two empty
+states that used to be dead ends; subtle mount transitions on the product grid and new
+cart items; and one consistent global focus-visible treatment replacing an inconsistent
+patchwork where most custom links/buttons had no keyboard focus indicator at all.
+
+**Real bug fixed along the way (not on the original checklist)**: `ProductDetailPage`
+never rendered `<AppHeader />` at all — visiting any single product page lost the entire
+nav, cart access, and (now) branding, with no way back except the browser's own back
+button.
+
+**Blocked, needs backend**: none of the checklist items themselves are blocked. The one
+thing worth flagging as a deliberate scope boundary, not a blocker: a true public,
+pre-login product catalog would need `api-gateway`'s `SecurityConfig` to allow
+unauthenticated `GET /products` — currently `.anyExchange().authenticated()` requires a
+token for everything. I did not touch this (it's a backend/API-contract change, out of
+scope per the rules), and instead made the login-first flow itself feel intentional
+(see Section 1). If a public catalog is something you actually want, that's the specific
+change it would take.
+
+**What to specifically look at before merging**:
+1. The "Cartly" name — I picked it since the checklist explicitly asked for a real
+   wordmark rather than the literal product name; it's a one-line change in `Logo.jsx`
+   if you'd rather use something else.
+2. Actually click through the full flow in a real browser and watch the console — I
+   don't have one available in this environment, so everything here is a careful
+   code-level review, not a substitute for that.
+3. Resize the window down to a phone width and confirm it feels right — the existing
+   `flex-wrap`/`max-width` patterns looked sound in review, but I couldn't visually
+   confirm the result.

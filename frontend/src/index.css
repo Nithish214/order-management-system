@@ -36,3 +36,17 @@ button {
 button:disabled {
   cursor: not-allowed;
 }
+
+/* One focus-visible treatment for every link and button in the app, not five separate
+   ones each page happened to remember (or not) to add for its own custom links/buttons
+   (.category-link, .cart-remove, .history-order-link, plain nav links, etc. previously
+   had none at all). :focus-visible specifically, not :focus, so this only shows for
+   keyboard navigation, not every mouse click. Inputs/selects keep their own existing
+   border-color-based focus treatment (see e.g. .auth-field input:focus) -- deliberately
+   untouched here, that's a different, already-consistent pattern for form fields. */
+a:focus-visible,
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
+  border-radius: var(--radius-control);
+}
