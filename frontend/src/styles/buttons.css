@@ -4,6 +4,9 @@
    five separately-redesigned pages. */
 
 .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: inherit;
   font-size: var(--text-base-size);
   font-weight: var(--font-weight-semibold);
@@ -35,6 +38,9 @@
 }
 
 .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: inherit;
   font-size: var(--text-sm-size);
   font-weight: var(--font-weight-regular);

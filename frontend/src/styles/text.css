@@ -31,3 +31,12 @@
 .page-error {
   margin: 0 0 var(--space-3);
 }
+
+/* Pairs a Spinner with a "Loading X..." message -- shared across every page's own
+   full-page/section loading text rather than each page's stylesheet redeclaring the
+   same flex+gap rule. */
+.loading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

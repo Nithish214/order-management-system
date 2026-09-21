@@ -4,6 +4,7 @@ import { useApiFetch } from "../api/useApiFetch";
 import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import AppHeader from "../components/AppHeader";
+import Spinner from "../components/Spinner";
 import "./OrderStatusPage.css";
 
 const POLL_INTERVAL_MS = 3000;
@@ -109,7 +110,9 @@ export default function OrderStatusPage() {
     return (
       <>
         <AppHeader />
-        <p className="text-muted">Loading order...</p>
+        <p className="text-muted loading-row">
+          <Spinner /> Loading order...
+        </p>
       </>
     );
   }
@@ -137,6 +140,7 @@ export default function OrderStatusPage() {
 
         {CANCELLABLE_STATUSES.includes(order.status) && (
           <button onClick={handleCancel} disabled={cancelling} className="btn-secondary cancel-button">
+            {cancelling && <Spinner size={14} />}
             {cancelling ? "Cancelling..." : "Cancel order"}
           </button>
         )}

@@ -4,6 +4,7 @@ import { useApiFetch } from "../api/useApiFetch";
 import { useAuth } from "../auth/AuthContext";
 import { useCart } from "./CartContext";
 import { useCurrency } from "../currency/CurrencyContext";
+import Spinner from "../components/Spinner";
 import { friendlyErrorMessage } from "../utils/errors";
 import "./CartSummary.css";
 
@@ -155,6 +156,7 @@ export default function CartSummary() {
             <p className="text-muted">Admin accounts can't place orders.</p>
           ) : (
             <button className="btn-primary" onClick={handlePlaceOrder} disabled={placingOrder}>
+              {placingOrder && <Spinner size={14} />}
               {placingOrder ? "Placing order..." : "Place order"}
             </button>
           )}

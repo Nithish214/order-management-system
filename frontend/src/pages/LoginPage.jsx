@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
+import Spinner from "../components/Spinner";
 import "./AuthForm.css";
 
 export default function LoginPage() {
@@ -57,6 +58,7 @@ export default function LoginPage() {
         </div>
         {error && <p className="text-error auth-error">{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading}>
+          {loading && <Spinner size={14} />}
           {loading ? "Logging in..." : "Log in"}
         </button>
       </form>

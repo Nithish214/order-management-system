@@ -8,6 +8,7 @@ import CartSummary from "../cart/CartSummary";
 import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
 import AppHeader from "../components/AppHeader";
+import Spinner from "../components/Spinner";
 import "./ProductsPage.css";
 
 // Admin image-upload and restock controls used to live inline in this page's product
@@ -268,7 +269,9 @@ export default function ProductsPage() {
       <>
         <AppHeader />
         <div className="products-page">
-          <p className="text-muted">Loading products...</p>
+          <p className="text-muted loading-row">
+            <Spinner /> Loading products...
+          </p>
         </div>
       </>
     );
@@ -355,7 +358,11 @@ export default function ProductsPage() {
                 catalog, "your search matched nothing," and "this category has no
                 products" are three different situations, and conflating them would
                 mislead whichever one is actually happening. */}
-            {searching && <p className="text-muted">Loading...</p>}
+            {searching && (
+              <p className="text-muted loading-row">
+                <Spinner /> Loading...
+              </p>
+            )}
             {!searching && products.length === 0 && (
               <p className="text-muted">
                 {debouncedQuery

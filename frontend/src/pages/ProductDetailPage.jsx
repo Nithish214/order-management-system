@@ -8,6 +8,7 @@ import { useCurrency } from "../currency/CurrencyContext";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
+import Spinner from "../components/Spinner";
 import "./ProductDetailPage.css";
 
 // Kept in sync with the same allowlist Order Service enforces server-side
@@ -208,7 +209,9 @@ export default function ProductDetailPage() {
   if (loading) {
     return (
       <div className="detail-page">
-        <p className="text-muted">Loading product...</p>
+        <p className="text-muted loading-row">
+          <Spinner /> Loading product...
+        </p>
       </div>
     );
   }
@@ -237,6 +240,7 @@ export default function ProductDetailPage() {
     ...(product.videoUrl ? [{ type: "video", key: "video", url: product.videoUrl }] : []),
   ];
   const selectedItem = galleryItems[selectedImageIndex];
+  const removingSelected = selectedItem?.type === "video" ? deletingVideo : deletingImageId === selectedItem?.id;
 
   return (
     <div className="detail-page">
@@ -295,12 +299,11 @@ export default function ProductDetailPage() {
                 }
                 disabled={deletingImageId !== null || deletingVideo}
               >
-                {selectedItem.type === "video"
-                  ? deletingVideo
-                    ? "Removing..."
-                    : "Remove this video"
-                  : deletingImageId === selectedItem.id
-                    ? "Removing..."
+                {removingSelected && <Spinner size={14} />}
+                {removingSelected
+                  ? "Removing..."
+                  : selectedItem.type === "video"
+                    ? "Remove this video"
                     : "Remove this image"}
               </button>
             </div>
@@ -375,6 +378,7 @@ export default function ProductDetailPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading || product.images.length >= MAX_IMAGES_PER_PRODUCT}
               >
+                {uploading && <Spinner size={14} />}
                 {uploading
                   ? "Uploading..."
                   : product.images.length >= MAX_IMAGES_PER_PRODUCT
@@ -396,6 +400,7 @@ export default function ProductDetailPage() {
                 onClick={() => videoFileInputRef.current?.click()}
                 disabled={uploadingVideo}
               >
+                {uploadingVideo && <Spinner size={14} />}
                 {uploadingVideo ? "Uploading..." : product.videoUrl ? "Replace video" : "Upload video"}
               </button>
               <div className="restock-control">
@@ -408,6 +413,7 @@ export default function ProductDetailPage() {
                   aria-label="Quantity to restock"
                 />
                 <button type="button" className="btn-secondary" onClick={handleRestock} disabled={restocking}>
+                  {restocking && <Spinner size={14} />}
                   {restocking ? "Restocking..." : "Restock"}
                 </button>
               </div>

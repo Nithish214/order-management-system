@@ -1,0 +1,22 @@
+/* currentColor, not a fixed token -- this sits inside both a solid-accent .btn-primary
+   (white text) and plain muted page text (gray), and a spinner hardcoded to one specific
+   color would be invisible against its own button in the first case. Inheriting
+   whatever text color already surrounds it means it's always readable, in every context,
+   with no per-call-site color prop to remember to set. border-top-color at full opacity
+   (the rest of the ring faded) is what actually reads as "spinning" rather than "a
+   static ring," since it's the one segment that visibly moves as the element rotates. */
+.spinner {
+  display: inline-block;
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spinner-rotate 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}

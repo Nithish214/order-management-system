@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { signUp, confirmSignUp } from "../auth/cognito";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
+import Spinner from "../components/Spinner";
 import "./AuthForm.css";
 
 // Two-step flow, tracked with a plain "step" string in local state rather than separate
@@ -81,6 +82,7 @@ export default function SignupPage() {
             </div>
             {error && <p className="text-error auth-error">{error}</p>}
             <button type="submit" className="btn-primary" disabled={loading}>
+              {loading && <Spinner size={14} />}
               {loading ? "Creating account..." : "Create account"}
             </button>
           </form>
@@ -105,6 +107,7 @@ export default function SignupPage() {
             </div>
             {error && <p className="text-error auth-error">{error}</p>}
             <button type="submit" className="btn-primary" disabled={loading}>
+              {loading && <Spinner size={14} />}
               {loading ? "Confirming..." : "Confirm"}
             </button>
           </form>

@@ -5,6 +5,7 @@ import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import StatusBadge from "../components/StatusBadge";
 import AppHeader from "../components/AppHeader";
+import Spinner from "../components/Spinner";
 import "./OrderHistoryPage.css";
 
 export default function OrderHistoryPage() {
@@ -52,7 +53,9 @@ export default function OrderHistoryPage() {
       <>
         <AppHeader />
         <div className="history-page">
-          <p className="text-muted">Loading order history...</p>
+          <p className="text-muted loading-row">
+            <Spinner /> Loading order history...
+          </p>
         </div>
       </>
     );
