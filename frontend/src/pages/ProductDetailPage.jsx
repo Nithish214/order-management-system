@@ -107,8 +107,9 @@ export default function ProductDetailPage() {
     try {
       const updated = await addProductImage(apiFetch, product.id, file);
       setProduct(updated);
-      // Jump to the image that was just added -- it's always last, since images are
-      // ordered oldest-first.
+      // Jump to the image that was just added -- images always occupy the first slots of
+      // the gallery (see galleryItems below), video (if any) always last, so this index
+      // is valid regardless of whether a video exists.
       setSelectedImageIndex(updated.images.length - 1);
     } catch (err) {
       setError(friendlyErrorMessage(err));
@@ -127,8 +128,11 @@ export default function ProductDetailPage() {
       // on a totally different image than before (deleted one earlier in the list, which
       // shifted everything after it back by one) -- clamping to the new last valid index
       // is simple and always leaves something sensible on screen, rather than a picked
-      // index this render finds nothing at.
-      setSelectedImageIndex((prev) => Math.min(prev, Math.max(0, updated.images.length - 1)));
+      // index this render finds nothing at. Counts the video too (see galleryItems
+      // below), since it occupies the final slot whenever one exists.
+      setSelectedImageIndex((prev) =>
+        Math.min(prev, Math.max(0, updated.images.length + (updated.videoUrl ? 1 : 0) - 1))
+      );
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
@@ -146,6 +150,9 @@ export default function ProductDetailPage() {
     try {
       const updated = await setProductVideo(apiFetch, product.id, file);
       setProduct(updated);
+      // The video always occupies the last gallery slot, right after every image (see
+      // galleryItems below) -- jump to it so the upload's result is immediately visible.
+      setSelectedImageIndex(updated.images.length);
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
@@ -159,6 +166,9 @@ export default function ProductDetailPage() {
     try {
       const updated = await deleteProductVideo(apiFetch, product.id);
       setProduct(updated);
+      // Same clamping reasoning as handleDeleteImage -- the video (now gone) was the
+      // last slot, so this falls back to the new last image, or 0 if there are none.
+      setSelectedImageIndex((prev) => Math.min(prev, Math.max(0, updated.images.length - 1)));
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
@@ -218,6 +228,16 @@ export default function ProductDetailPage() {
     );
   }
 
+  // One combined carousel, images first (oldest-first, same order as before) then the
+  // video last, if there is one -- browsing the gallery cycles through both instead of
+  // the video always sitting in its own separate block below. selectedImageIndex indexes
+  // into THIS list now, not just product.images.
+  const galleryItems = [
+    ...product.images.map((image) => ({ type: "image", key: image.id, id: image.id, url: image.imageUrl })),
+    ...(product.videoUrl ? [{ type: "video", key: "video", url: product.videoUrl }] : []),
+  ];
+  const selectedItem = galleryItems[selectedImageIndex];
+
   return (
     <div className="detail-page">
       <p>
@@ -229,85 +249,60 @@ export default function ProductDetailPage() {
       <div className="detail-layout">
         <div className="detail-gallery">
           <div className="detail-image">
-            {product.images.length > 0 ? (
-              <img src={product.images[selectedImageIndex]?.imageUrl} alt={product.name} />
-            ) : (
+            {!selectedItem ? (
               <div className="detail-image-placeholder" aria-hidden="true" />
+            ) : selectedItem.type === "video" ? (
+              <video src={selectedItem.url} controls />
+            ) : (
+              <img src={selectedItem.url} alt={product.name} />
             )}
           </div>
 
-          {/* Only worth showing once there's an actual choice to make -- a single-image
-              product (still the common case) looks exactly like it did before this
+          {/* Only worth showing once there's an actual choice to make -- a single-item
+              gallery (still the common case) looks exactly like it did before this
               feature existed. */}
-          {product.images.length > 1 && (
+          {galleryItems.length > 1 && (
             <div className="detail-thumb-strip">
-              {product.images.map((image, index) => (
+              {galleryItems.map((item, index) => (
                 <button
-                  key={image.id}
+                  key={item.key}
                   type="button"
                   className={"detail-thumb" + (index === selectedImageIndex ? " detail-thumb-selected" : "")}
                   onClick={() => setSelectedImageIndex(index)}
-                  aria-label={`Show image ${index + 1} of ${product.images.length}`}
+                  aria-label={item.type === "video" ? "Show video" : `Show image ${index + 1} of ${galleryItems.length}`}
                   aria-current={index === selectedImageIndex}
                 >
-                  <img src={image.imageUrl} alt="" />
+                  {item.type === "video" ? (
+                    <span className="detail-thumb-video" aria-hidden="true">&#9654;</span>
+                  ) : (
+                    <img src={item.url} alt="" />
+                  )}
                 </button>
               ))}
             </div>
           )}
 
-          {isAdmin && product.images.length > 0 && (
+          {isAdmin && selectedItem && (
             <div className="detail-image-admin">
               <p className="text-muted detail-image-admin-label">
-                {selectedImageIndex + 1} of {product.images.length} images
+                {selectedImageIndex + 1} of {galleryItems.length}
               </p>
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => handleDeleteImage(product.images[selectedImageIndex].id)}
-                disabled={deletingImageId !== null}
+                onClick={() =>
+                  selectedItem.type === "video" ? handleDeleteVideo() : handleDeleteImage(selectedItem.id)
+                }
+                disabled={deletingImageId !== null || deletingVideo}
               >
-                {deletingImageId === product.images[selectedImageIndex]?.id
-                  ? "Removing..."
-                  : "Remove this image"}
+                {selectedItem.type === "video"
+                  ? deletingVideo
+                    ? "Removing..."
+                    : "Remove this video"
+                  : deletingImageId === selectedItem.id
+                    ? "Removing..."
+                    : "Remove this image"}
               </button>
-            </div>
-          )}
-
-          {/* Visible to every visitor, not just admins -- a demo/showcase clip is
-              product media the same way images are; only uploading/removing it is an
-              admin action (see the upload controls below). */}
-          {product.videoUrl && (
-            <video className="detail-video" src={product.videoUrl} controls />
-          )}
-
-          {isAdmin && (
-            <div className="detail-video-admin">
-              <input
-                type="file"
-                accept={ACCEPTED_VIDEO_TYPES}
-                ref={videoFileInputRef}
-                onChange={handleVideoFileSelected}
-                hidden
-              />
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => videoFileInputRef.current?.click()}
-                disabled={uploadingVideo}
-              >
-                {uploadingVideo ? "Uploading..." : product.videoUrl ? "Replace video" : "Upload video"}
-              </button>
-              {product.videoUrl && (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={handleDeleteVideo}
-                  disabled={deletingVideo}
-                >
-                  {deletingVideo ? "Removing..." : "Remove video"}
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -387,6 +382,21 @@ export default function ProductDetailPage() {
                     : product.images.length > 0
                       ? "Add image"
                       : "Upload image"}
+              </button>
+              <input
+                type="file"
+                accept={ACCEPTED_VIDEO_TYPES}
+                ref={videoFileInputRef}
+                onChange={handleVideoFileSelected}
+                hidden
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => videoFileInputRef.current?.click()}
+                disabled={uploadingVideo}
+              >
+                {uploadingVideo ? "Uploading..." : product.videoUrl ? "Replace video" : "Upload video"}
               </button>
               <div className="restock-control">
                 <input
