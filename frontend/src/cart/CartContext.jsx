@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useApiFetch } from "../api/useApiFetch";
+import { useToast } from "../toast/ToastContext";
 
 // Same Context pattern as AuthContext -- this is genuinely the recurring shape for
 // "some piece of state that many unrelated components need to read or change": a
@@ -18,6 +19,7 @@ const CartContext = createContext(null);
 export function CartProvider({ children }) {
   const { isAuthenticated } = useAuth();
   const apiFetch = useApiFetch();
+  const { showToast } = useToast();
 
   // Cart items shaped as: { productId, sku, name, unitPrice, quantity, imageUrl }
   const [items, setItems] = useState([]);
@@ -52,26 +54,42 @@ export function CartProvider({ children }) {
       method: "POST",
       body: JSON.stringify({ productId: product.id, quantity }),
     });
-    if (response.ok) setItems(await response.json());
+    if (response.ok) {
+      setItems(await response.json());
+      showToast("Added to cart");
+    }
   }
 
   // quantity <= 0 removes the item entirely -- CartController's own convention, same as
-  // this function's previous client-only behavior.
+  // this function's previous client-only behavior. Only THAT case toasts -- a plain
+  // quantity tick (the stepper's +/- buttons) isn't a moment that needs announcing, and
+  // toasting every single click would train anyone using the stepper to just tune it out.
   async function setQuantity(productId, quantity) {
     const response = await apiFetch(`/cart/items/${productId}`, {
       method: "PUT",
       body: JSON.stringify({ quantity }),
     });
-    if (response.ok) setItems(await response.json());
+    if (response.ok) {
+      setItems(await response.json());
+      if (quantity <= 0) showToast("Removed from cart");
+    }
   }
 
   async function removeItem(productId) {
     const response = await apiFetch(`/cart/items/${productId}`, {
       method: "DELETE",
     });
-    if (response.ok) setItems(await response.json());
+    if (response.ok) {
+      setItems(await response.json());
+      showToast("Removed from cart");
+    }
   }
 
+  // No toast here, deliberately -- this only ever runs right after a successful
+  // checkout (see CartSummary's handlePlaceOrder), which already gets its own, much
+  // more prominent "Order placed!" banner on the page it navigates to next. A second
+  // "Removed from cart"-style toast at that exact moment would compete with that
+  // banner for attention over something the customer didn't even directly do.
   async function clear() {
     const response = await apiFetch("/cart", { method: "DELETE" });
     if (response.ok) setItems(await response.json());

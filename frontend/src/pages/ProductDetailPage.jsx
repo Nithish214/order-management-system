@@ -6,6 +6,7 @@ import { setProductVideo, deleteProductVideo } from "../api/productVideos";
 import { useCart } from "../cart/CartContext";
 import { useCurrency } from "../currency/CurrencyContext";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../toast/ToastContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
 import Spinner from "../components/Spinner";
@@ -32,6 +33,7 @@ export default function ProductDetailPage() {
   const cart = useCart();
   const { formatPrice } = useCurrency();
   const { isAdmin } = useAuth();
+  const { showToast } = useToast();
   const fileInputRef = useRef(null);
   const videoFileInputRef = useRef(null);
 
@@ -210,6 +212,12 @@ export default function ProductDetailPage() {
       const updated = await response.json();
       setStockQuantity(updated.availableQuantity);
       setRestockInput("");
+      // The one genuinely silent success left in this file after the toast pass --
+      // image/video upload and removal all show their own obvious result (a new
+      // thumbnail appears, a slide disappears), but this only changes a plain number
+      // sitting among several other page elements, easy to miss if it's not glanced at
+      // right when it updates.
+      showToast(`Restocked ${addQuantity} -- now ${updated.availableQuantity} in stock`);
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {

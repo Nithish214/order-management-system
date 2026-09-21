@@ -235,3 +235,43 @@ sorting/filtering across an ENTIRE multi-page category would need the backend's
 the sorting itself (the way the old server-side `sort` param already did) rather than
 the frontend re-sorting only what it happens to have in memory. Flagging this now so
 it's a known, visible tradeoff rather than something you discover from a bug report.
+
+## Step 2: Toast notifications
+
+**What was built**: `toast/ToastContext.jsx` + `toast/Toast.css` -- a small Provider +
+`useToast()` hook, no library. Toasts stack bottom-center, auto-dismiss after 3s, are
+also dismissable by hand, and visually reuse the exact "tinted background + solid
+colored border" language `OrderStatusPage`'s `.outcome`/`.order-placed-banner` already
+established, rather than inventing a new "toast library" look.
+
+**Where it's wired up**: directly inside `CartContext`'s `addItem`/`setQuantity`/
+`removeItem` (only on their success branch — a failed cart action never claims to have
+succeeded), not repeated at each call site — every page that touches the cart (the
+product grid, the product detail page, the cart page itself) gets the toast automatically,
+with nothing to remember to add per-page. Specifically:
+- `addItem` success → "Added to cart"
+- `removeItem`, or `setQuantity` down to `<= 0` (this app's existing "remove via
+  quantity" convention) → "Removed from cart"
+- A quantity *tick* (the stepper's plain +/- buttons) deliberately does **not** toast —
+  only asked for "added"/"removed," and toasting every single click would just train
+  people to tune the toasts out.
+- `clear()` (called right after a successful checkout) deliberately does **not** toast
+  either — that moment already gets its own, much more prominent "Order placed!" banner
+  (see Round 1's Step 3); a second toast at the same instant would compete with it over
+  something the customer didn't even directly do.
+
+**The one other genuinely silent success moment found**: admin's "Restock" button on
+`ProductDetailPage` — success only changed a plain number (the stock count) sitting
+among several other page elements, easy to miss. Now also shows a toast
+("Restocked N -- now M in stock"). Deliberately did **not** add toasts to image/video
+upload or removal, since those already have their own obvious, unambiguous result (a
+new thumbnail appears, a slide disappears) — adding a toast on top would be the exact
+toast-overuse this step's own instructions warned against, not genuinely new feedback.
+
+**Not added**: error-variant toasts. Every failure path in this app already shows an
+inline error message somewhere on the page (see Round 1's `ErrorState` work and the
+various `text-error` paragraphs) — a duplicate toast for the same failure would be two
+error indicators competing for one problem, not an improvement. The toast system fully
+supports an `"error"` type (same subtle-background/solid-border treatment, just the red
+tokens instead of green) for if a genuinely toast-shaped failure ever comes up, but
+nothing currently calls it with that type.

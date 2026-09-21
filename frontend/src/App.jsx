@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { CartProvider } from "./cart/CartContext";
 import { CurrencyProvider } from "./currency/CurrencyContext";
+import { ToastProvider } from "./toast/ToastContext";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import ProductsPage from "./pages/ProductsPage";
@@ -94,9 +95,15 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <CurrencyProvider>
-          <CartProvider>
-            <AppRoutes />
-          </CartProvider>
+          {/* Above CartProvider, deliberately -- CartContext calls useToast() directly
+              from inside addItem/setQuantity/removeItem (see that file), so a toast can
+              fire from any page that touches the cart without that page needing to
+              remember to trigger one itself. */}
+          <ToastProvider>
+            <CartProvider>
+              <AppRoutes />
+            </CartProvider>
+          </ToastProvider>
         </CurrencyProvider>
       </AuthProvider>
     </BrowserRouter>
