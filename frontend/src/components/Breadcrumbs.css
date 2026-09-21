@@ -1,0 +1,39 @@
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  font-size: var(--text-sm-size);
+}
+
+.breadcrumbs li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Muted, not the standard link-blue accent -- a breadcrumb trail is wayfinding
+   furniture around the page, not a primary action competing with this app's one
+   accent color (see tokens.css's own comment on reserving that for primary actions and
+   links that matter). */
+.breadcrumbs a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+.breadcrumbs [aria-current="page"] {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.breadcrumbs-separator {
+  color: var(--color-border);
+}

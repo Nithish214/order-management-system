@@ -328,3 +328,33 @@ uses it** (same convention `OrderStatusPage.jsx` already follows for its own `St
   renders nothing at all (not even a spinner), deliberately, to avoid a flash of content
   during a near-instant check. A skeleton here would be strictly worse than the current
   "render nothing" — it would flicker in and immediately back out.
+
+## Step 4: Breadcrumbs
+
+**What was built**: `components/Breadcrumbs.jsx`/`.css` — a plain `Home / Category /
+Product Name` trail, muted text with an accent-on-hover treatment matching this app's
+existing plain-text-link style (`.back-link`, `.category-link`), not a boxed/pill
+"breadcrumb chip" look. The current page's own segment is always plain text, never a
+link (standard breadcrumb convention — there's nothing to navigate to by clicking "the
+page you're already on").
+- `ProductDetailPage` — replaces the old plain "← Back to products" link entirely,
+  rather than showing both (a breadcrumb trail and a separate back-link stacked right
+  above it would be two navigation aids doing overlapping jobs).
+- `ProductsPage` — shown optionally, exactly as the instructions allowed: only when a
+  category is actually selected (`Home / <Category>`). Showing "Home" alone with
+  nowhere else to link, on "All Products," would be a breadcrumb trail with nothing
+  in it — the category sidebar's own active-state highlight already answers "which
+  category" while actively browsing there anyway.
+
+**A real, necessary side change, not scope creep — flagging per rule 4's spirit even
+though this stayed entirely frontend**: making the product detail page's Category
+segment actually "navigate back to that level" (per the brief) needed `ProductsPage`'s
+`selectedCategory` to be a real, addressable thing — it was previously plain component
+state, reset to `""` on every mount, with no way for a link from a different page to
+land already-filtered. Switched it to be backed by a URL query param
+(`?category=Electronics`, via React Router's `useSearchParams`) instead: initialized
+from the URL on mount, and kept in sync (`setSearchParams`) whenever the category
+sidebar itself is used. This is what actually makes the breadcrumb's Category link work
+correctly, and as a side effect, category-filtered views are now real, bookmarkable,
+shareable, reload-safe URLs, which they weren't before. Search stayed untouched (still
+plain local state) — only asked about breadcrumbs for Home/Category/Product, not search.

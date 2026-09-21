@@ -12,6 +12,7 @@ import StockCount from "../components/StockCount";
 import Spinner from "../components/Spinner";
 import AppHeader from "../components/AppHeader";
 import ErrorState from "../components/ErrorState";
+import Breadcrumbs from "../components/Breadcrumbs";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./ProductDetailPage.css";
 
@@ -266,11 +267,13 @@ export default function ProductDetailPage() {
     <>
       <AppHeader />
       <div className="detail-page">
-        <p>
-          <Link to="/" className="back-link">
-            &larr; Back to products
-          </Link>
-        </p>
+        <Breadcrumbs
+          segments={[
+            { label: "Home", to: "/" },
+            { label: product.category, to: `/?category=${encodeURIComponent(product.category)}` },
+            { label: product.name },
+          ]}
+        />
 
         <div className="detail-layout">
         <div className="detail-gallery">

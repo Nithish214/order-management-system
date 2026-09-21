@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import Breadcrumbs from "../components/Breadcrumbs";
 import { useApiFetch } from "../api/useApiFetch";
 import { useAuth } from "../auth/AuthContext";
 import { useCart } from "../cart/CartContext";
@@ -47,6 +48,12 @@ export default function ProductsPage() {
   const cart = useCart();
   const { isAdmin } = useAuth();
   const { formatPrice } = useCurrency();
+  // Backs selectedCategory below -- a real URL query param, not just local state, so a
+  // category-filtered view has an actual address (?category=Electronics) that the
+  // product detail page's breadcrumb can link back to, that survives a reload, and that
+  // could be bookmarked/shared, the same way any other "which view am I looking at"
+  // state on the web works.
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [products, setProducts] = useState([]);
   // Keyed by productId -- Inventory Service's own data (GET /stock), fetched
@@ -78,7 +85,10 @@ export default function ProductsPage() {
   // "" means "All Products" -- deliberately not null/undefined, so it composes simply
   // with the search-vs-category precedence in the products effect below (an empty
   // string is falsy, same as no search query being falsy) without a separate null check.
-  const [selectedCategory, setSelectedCategory] = useState("");
+  // Initialized from the URL (see searchParams above), so landing on /?category=X --
+  // whether from the product detail page's breadcrumb, a bookmark, or a fresh reload --
+  // opens straight into that category instead of "All Products."
+  const [selectedCategory, setSelectedCategory] = useState(() => searchParams.get("category") || "");
   // Separate from `loading` on purpose: `loading` gates the full-page "Loading
   // products..." replacement below, which should only ever happen once, on the very
   // first load. Every search or category switch after that also needs loading-state
@@ -344,6 +354,10 @@ export default function ProductsPage() {
     setSelectedCategory(category);
     setSearchQuery("");
     setDebouncedQuery("");
+    // Keeps the URL matching whatever's actually selected -- clicking "All Products"
+    // (category === "") clears the param entirely rather than leaving a stale
+    // "?category=" behind.
+    setSearchParams(category ? { category } : {});
   }
 
   if (loading) {
@@ -365,6 +379,17 @@ export default function ProductsPage() {
     <>
       <AppHeader />
       <div className="products-page">
+        {/* Only once there's an actual second level to show -- "Home" on its own, with
+            nowhere else to link, isn't a breadcrumb trail, it's just a re-statement of
+            "Products" as a single dead link. The category sidebar's own active-state
+            already answers "which category" while browsing; this exists mainly for
+            what it hands the browser's own address bar/history/reload -- see
+            handleSelectCategory's URL sync -- and for symmetry with the product detail
+            page's own breadcrumb, which links back to exactly this. */}
+        {selectedCategory && (
+          <Breadcrumbs segments={[{ label: "Home", to: "/" }, { label: selectedCategory }]} />
+        )}
+
         <div className="products-intro">
           <h1 className="products-heading">Shop our catalog</h1>
           <p className="text-muted products-subheading">Browse by category or search to find what you need.</p>
