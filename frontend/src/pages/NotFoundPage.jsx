@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./NotFoundPage.css";
 
 // The one route that intentionally sits outside ProtectedRoute (see App.jsx) -- a
@@ -7,6 +8,8 @@ import "./NotFoundPage.css";
 // were your session. No AppHeader either, deliberately -- this can be reached by a
 // logged-out visitor, so it stays as bare and self-contained as the auth pages.
 export default function NotFoundPage() {
+  useDocumentTitle("Page not found");
+
   return (
     <div className="not-found-page">
       <h1>Page not found</h1>

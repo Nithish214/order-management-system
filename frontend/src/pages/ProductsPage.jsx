@@ -9,6 +9,7 @@ import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
 import AppHeader from "../components/AppHeader";
 import Spinner from "../components/Spinner";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./ProductsPage.css";
 
 // Admin image-upload and restock controls used to live inline in this page's product
@@ -73,6 +74,8 @@ export default function ProductsPage() {
   // (see resolveSort's comment), so the dropdown for it is hidden below while
   // debouncedQuery is set, rather than offering a control that would silently do nothing.
   const [sort, setSort] = useState("featured");
+
+  useDocumentTitle(debouncedQuery ? `Search: "${debouncedQuery}"` : selectedCategory || "Products");
 
   // productId -> quantity currently in the cart, derived from cart.items (the cart is
   // the single source of truth -- no separate "did I just add this" flag to keep in
@@ -281,7 +284,10 @@ export default function ProductsPage() {
     <>
       <AppHeader />
       <div className="products-page">
-        <h1 className="products-heading">Products</h1>
+        <div className="products-intro">
+          <h1 className="products-heading">Shop our catalog</h1>
+          <p className="text-muted products-subheading">Browse by category or search to find what you need.</p>
+        </div>
 
         {/* Deliberately outside the `loading`/`searching` conditionals -- this input
             must never unmount or lose focus while a search is in flight, which is the

@@ -9,6 +9,8 @@ import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
 import Spinner from "../components/Spinner";
+import AppHeader from "../components/AppHeader";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./ProductDetailPage.css";
 
 // Kept in sync with the same allowlist Order Service enforces server-side
@@ -51,6 +53,8 @@ export default function ProductDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [restockInput, setRestockInput] = useState("");
   const [restocking, setRestocking] = useState(false);
+
+  useDocumentTitle(product ? product.name : loading ? "Loading product..." : "Product not found");
 
   useEffect(() => {
     let cancelled = false;
@@ -208,11 +212,14 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <div className="detail-page">
-        <p className="text-muted loading-row">
-          <Spinner /> Loading product...
-        </p>
-      </div>
+      <>
+        <AppHeader />
+        <div className="detail-page">
+          <p className="text-muted loading-row">
+            <Spinner /> Loading product...
+          </p>
+        </div>
+      </>
     );
   }
 
@@ -220,14 +227,17 @@ export default function ProductDetailPage() {
   // sitting inline in a half-empty layout below would be more confusing, not less.
   if (error && !product) {
     return (
-      <div className="detail-page">
-        <p>
-          <Link to="/" className="back-link">
-            &larr; Back to products
-          </Link>
-        </p>
-        <p className="text-error page-error">{error}</p>
-      </div>
+      <>
+        <AppHeader />
+        <div className="detail-page">
+          <p>
+            <Link to="/" className="back-link">
+              &larr; Back to products
+            </Link>
+          </p>
+          <p className="text-error page-error">{error}</p>
+        </div>
+      </>
     );
   }
 
@@ -243,14 +253,16 @@ export default function ProductDetailPage() {
   const removingSelected = selectedItem?.type === "video" ? deletingVideo : deletingImageId === selectedItem?.id;
 
   return (
-    <div className="detail-page">
-      <p>
-        <Link to="/" className="back-link">
-          &larr; Back to products
-        </Link>
-      </p>
+    <>
+      <AppHeader />
+      <div className="detail-page">
+        <p>
+          <Link to="/" className="back-link">
+            &larr; Back to products
+          </Link>
+        </p>
 
-      <div className="detail-layout">
+        <div className="detail-layout">
         <div className="detail-gallery">
           <div className="detail-image">
             {!selectedItem ? (
@@ -421,6 +433,7 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

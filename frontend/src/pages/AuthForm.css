@@ -15,6 +15,17 @@
   margin-bottom: var(--space-4);
 }
 
+/* The one place this app's own identity gets real room -- before a login/signup form
+   takes over, someone landing here for the first time should understand "this is an
+   online store" within seconds, not just see a bare form. */
+.auth-brand {
+  margin-bottom: var(--space-5);
+}
+
+.auth-tagline {
+  margin: var(--space-2) 0 0;
+}
+
 /* Color/size come from the shared .text-muted/.text-error utilities (styles/text.css) --
    these two classes add only the spacing specific to this layout. */
 .auth-hint {

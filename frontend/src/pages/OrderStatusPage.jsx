@@ -5,6 +5,7 @@ import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import AppHeader from "../components/AppHeader";
 import Spinner from "../components/Spinner";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./OrderStatusPage.css";
 
 const POLL_INTERVAL_MS = 3000;
@@ -25,6 +26,8 @@ export default function OrderStatusPage() {
   const [order, setOrder] = useState(null);
   const [error, setError] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+
+  useDocumentTitle(order ? `Order #${order.id}` : "Order status");
 
   useEffect(() => {
     let intervalId;

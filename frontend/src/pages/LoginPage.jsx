@@ -3,9 +3,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import Spinner from "../components/Spinner";
+import Logo from "../components/Logo";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./AuthForm.css";
 
 export default function LoginPage() {
+  useDocumentTitle("Log in");
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -34,6 +37,10 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
+      <div className="auth-brand">
+        <Logo size="lg" />
+        <p className="text-muted auth-tagline">Browse products, add to cart, and check out in minutes.</p>
+      </div>
       <h1>Log in</h1>
       <form onSubmit={handleSubmit}>
         <div className="auth-field">

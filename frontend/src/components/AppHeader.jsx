@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useCart } from "../cart/CartContext";
+import Logo from "./Logo";
+import { CartIcon } from "./icons";
 import "./AppHeader.css";
 
 // Persistent across every signed-in page (Products, Order History, Order Status, Cart) --
@@ -15,12 +17,13 @@ export default function AppHeader() {
   return (
     <header className="app-header">
       <Link to="/" className="app-header-brand">
-        Order Management
+        <Logo />
       </Link>
       <nav className="app-header-nav">
         <Link to="/">Products</Link>
         <Link to="/orders">Order history</Link>
         <Link to="/cart" className="app-header-cart-link">
+          <CartIcon size={18} />
           Cart
           {itemCount > 0 && <span className="app-header-cart-badge">{itemCount}</span>}
         </Link>

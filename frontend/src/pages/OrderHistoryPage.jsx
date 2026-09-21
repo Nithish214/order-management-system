@@ -6,9 +6,11 @@ import { friendlyErrorMessage } from "../utils/errors";
 import StatusBadge from "../components/StatusBadge";
 import AppHeader from "../components/AppHeader";
 import Spinner from "../components/Spinner";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./OrderHistoryPage.css";
 
 export default function OrderHistoryPage() {
+  useDocumentTitle("Order history");
   const apiFetch = useApiFetch();
   const { formatPrice } = useCurrency();
   const [orders, setOrders] = useState([]);

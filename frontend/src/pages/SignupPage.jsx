@@ -4,6 +4,8 @@ import { signUp, confirmSignUp } from "../auth/cognito";
 import { useAuth } from "../auth/AuthContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import Spinner from "../components/Spinner";
+import Logo from "../components/Logo";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./AuthForm.css";
 
 // Two-step flow, tracked with a plain "step" string in local state rather than separate
@@ -20,6 +22,8 @@ export default function SignupPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  useDocumentTitle(step === "confirm" ? "Check your email" : "Create account");
 
   async function handleRegister(event) {
     event.preventDefault();
@@ -56,6 +60,10 @@ export default function SignupPage() {
 
   return (
     <div className="auth-page">
+      <div className="auth-brand">
+        <Logo size="lg" />
+        <p className="text-muted auth-tagline">Browse products, add to cart, and check out in minutes.</p>
+      </div>
       {step === "register" ? (
         <>
           <h1>Create account</h1>

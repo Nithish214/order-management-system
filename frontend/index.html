@@ -3,7 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Order Management System</title>
+    <!-- Matches Logo.jsx's mark exactly (accent-filled square + cart glyph) -- hardcoded
+         hex here, not var(--color-accent), since a static favicon file can't read this
+         app's own CSS custom properties. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Overwritten per-route by useDocumentTitle (see src/hooks/useDocumentTitle.js) --
+         this is only what shows for the instant before React mounts, or if JS is
+         disabled. -->
+    <title>Cartly</title>
     <!-- Only the two weights the design direction specifies (400, 600) -- requesting more
          than the design actually uses is pure wasted download for every visitor. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

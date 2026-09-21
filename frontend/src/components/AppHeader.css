@@ -10,9 +10,9 @@
   border-bottom: var(--border-width) solid var(--color-border);
 }
 
+/* Logo (see Logo.jsx) already carries its own color/weight -- this wrapper link just
+   needs to not underline it. */
 .app-header-brand {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
   text-decoration: none;
 }
 

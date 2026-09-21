@@ -11,10 +11,18 @@
 
 /* .page-header/.page-nav removed -- their job (Order history link, Log out) moved to the
    shared AppHeader once every page needed the same nav, not just this one. */
+.products-intro {
+  margin: var(--space-3) 0 var(--space-4);
+}
+
 .products-heading {
   font-size: var(--text-xl-size);
   line-height: var(--text-xl-line);
-  margin: var(--space-3) 0 var(--space-4);
+  margin: 0 0 var(--space-1);
+}
+
+.products-subheading {
+  margin: 0;
 }
 
 /* .page-error itself moved to styles/text.css (global) once the product detail page
