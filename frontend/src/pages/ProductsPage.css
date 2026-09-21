@@ -302,6 +302,34 @@
   align-self: flex-start;
 }
 
+/* Matches .product-card-thumb/.product-card-name/.product-card-price/.product-card-add's
+   own real dimensions above as closely as a plain rectangle can -- the whole point of a
+   skeleton is that its shape already looks like the content it's about to become,
+   rather than just "some gray boxes." */
+.skeleton-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  margin-bottom: var(--space-1);
+}
+
+/* .skeleton-text itself (the base "line of text" shape/height) lives in the shared
+   Skeleton.css -- these are just this page's own width overrides for the two different
+   text lines a card shows. */
+.skeleton-text-name {
+  width: 85%;
+}
+
+.skeleton-text-price {
+  width: 40%;
+}
+
+.skeleton-button {
+  width: 96px;
+  height: 30px;
+  margin-top: auto;
+  align-self: flex-start;
+}
+
 /* Same slot as .product-card-add above -- once a product is in the cart, its card shows
    this instead of the button (see the grid's conditional render), so it needs the same
    "stick to the bottom of the card" placement rather than the shared .quantity-stepper's

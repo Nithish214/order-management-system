@@ -8,9 +8,32 @@ import CartSummary from "../cart/CartSummary";
 import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
 import AppHeader from "../components/AppHeader";
-import Spinner from "../components/Spinner";
+import Skeleton from "../components/Skeleton";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./ProductsPage.css";
+
+// A grid of these, not a spinner -- this page's loading moments (first load, every
+// category/search switch) always resolve into the exact same shape (a grid of cards,
+// each an image + two text lines + a button), predictable enough that showing that
+// shape early reads as "this is about to be a product grid," not just "something is
+// loading." Count is a fixed, reasonable "fills the viewport without scrolling" number,
+// not tied to the real page size (100) -- nobody needs 100 shimmering rectangles.
+const SKELETON_CARD_COUNT = 8;
+
+function ProductGridSkeleton() {
+  return (
+    <div className="product-grid">
+      {Array.from({ length: SKELETON_CARD_COUNT }, (_, index) => (
+        <div className="product-card" key={index}>
+          <Skeleton className="skeleton-thumb" />
+          <Skeleton className="skeleton-text skeleton-text-name" />
+          <Skeleton className="skeleton-text skeleton-text-price" />
+          <Skeleton className="skeleton-button" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Admin image-upload and restock controls used to live inline in this page's product
 // rows -- moved out entirely as part of the grid redesign (ProductDetailPage already has
@@ -328,9 +351,11 @@ export default function ProductsPage() {
       <>
         <AppHeader />
         <div className="products-page">
-          <p className="text-muted loading-row">
-            <Spinner /> Loading products...
-          </p>
+          <div className="products-intro">
+            <h1 className="products-heading">Shop our catalog</h1>
+            <p className="text-muted products-subheading">Browse by category or search to find what you need.</p>
+          </div>
+          <ProductGridSkeleton />
         </div>
       </>
     );
@@ -475,11 +500,7 @@ export default function ProductsPage() {
                 products," and "the price filter excluded everything on this page" are
                 all different situations, and conflating them would mislead whichever
                 one is actually happening. */}
-            {searching && (
-              <p className="text-muted loading-row">
-                <Spinner /> Loading...
-              </p>
-            )}
+            {searching && <ProductGridSkeleton />}
             {!searching && products.length === 0 && (
               <p className="text-muted">
                 {debouncedQuery

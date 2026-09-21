@@ -1,0 +1,43 @@
+/* color-mix, not a new raw hex value -- the shimmer's bright band is derived from the
+   existing border token mixed toward white, the same technique Spinner.css already uses
+   for its own faded track, rather than inventing a new one-off color for this. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-border) 25%,
+    color-mix(in srgb, var(--color-border), white 60%) 50%,
+    var(--color-border) 75%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--radius-control);
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--color-border);
+  }
+}
+
+/* The two shapes generic enough to be shared across pages -- "a line of text" and "a
+   small pill" -- both used as-is, or with a page-specific width override composed
+   alongside them (see e.g. ProductsPage.css's .skeleton-text-name). */
+.skeleton-text {
+  height: 14px;
+}
+
+.skeleton-pill {
+  width: 70px;
+  height: 22px;
+  border-radius: 999px;
+}

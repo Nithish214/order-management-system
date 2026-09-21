@@ -275,3 +275,56 @@ error indicators competing for one problem, not an improvement. The toast system
 supports an `"error"` type (same subtle-background/solid-border treatment, just the red
 tokens instead of green) for if a genuinely toast-shaped failure ever comes up, but
 nothing currently calls it with that type.
+
+## Step 3: Skeleton loaders
+
+**What was built**: `components/Skeleton.jsx`/`Skeleton.css` — a shared shimmer
+treatment (CSS-only, a `background-position` animation over a `linear-gradient`; the
+highlight color is `color-mix`'d from the existing border token, not a new raw hex
+value, same technique `Spinner.css` already uses for its own faded track). Two shape
+primitives generic enough to live in that shared file (`.skeleton-text`, a text-line
+height; `.skeleton-pill`, a status-badge-sized rounded rect); every other shape (a card's
+image square, its price line's width, a history row's link width) is a small,
+page-specific override composed on top, matching real content's actual dimensions as
+closely as a plain rectangle can.
+
+**Exactly the two places asked for, each as a local component next to the page that
+uses it** (same convention `OrderStatusPage.jsx` already follows for its own `Stepper`/
+`OutcomeSummary` sub-components):
+- `ProductGridSkeleton` (`ProductsPage.jsx`) — 8 skeleton cards in the real `.product-grid`
+  layout, replacing both the very-first-load spinner AND the `searching` state's spinner
+  (every category switch/search). The second one is the more genuinely valuable fix —
+  it fires far more often than the once-per-session first load.
+- `OrderHistorySkeleton` (`OrderHistoryPage.jsx`) — 3 skeleton rows in the real
+  `.history-list` layout.
+- Both fixed counts, not tied to the real eventual count (100 products, however many
+  orders exist) — nobody needs 100 shimmering rectangles, and there's no way to know the
+  real order count ahead of time anyway. Just enough to read as "this is about to be a
+  [grid/list]," which is the entire point of a skeleton.
+- Both also now show the page's own static chrome (heading, back-link) immediately
+  during the loading state, where before the ENTIRE page was replaced by just a spinner
+  line — a small, free improvement that goes naturally with showing a skeleton, since a
+  skeleton is trying to look like "the real page, filling in," not a full-page
+  interstitial.
+
+**Where spinners deliberately stayed, and why (per-location, not blanket)**:
+- **Every small inline button spinner** (Place order, Cancel order, Restock, upload
+  image/video, remove image/video, log in, create account, confirm signup code) — a
+  single button label has no predictable multi-part "shape" for a skeleton to mimic; a
+  skeleton here would just be a gray rectangle the same size as the button, which is
+  strictly less informative than the button's own label plus a spinner.
+- **`ProductDetailPage`'s full-page load** ("Loading product...") — not one of the two
+  locations asked for, and for a real reason beyond just scope: this page's layout mixes
+  a photo gallery, admin controls, and free-form text in a way that isn't a repeated
+  card/row shape the way a grid or a list is. A skeleton here would either have to guess
+  at a shape that doesn't actually generalize, or just become "one big gray rectangle,"
+  which is exactly the case where a plain spinner is the more honest choice — it doesn't
+  pretend to know a shape it doesn't have.
+- **`OrderStatusPage`'s full-page load** ("Loading order...") — same reasoning: a
+  pipeline + an outcome summary + an item list + a total, all different shapes, only
+  ever loaded for exactly one order at a time (never a repeated list of these). Also not
+  one of the two locations asked for.
+- **The auth-bootstrap check** (`App.jsx`'s `ProtectedRoute`) — unchanged from Round 1;
+  renders nothing at all (not even a spinner), deliberately, to avoid a flash of content
+  during a near-instant check. A skeleton here would be strictly worse than the current
+  "render nothing" — it would flicker in and immediately back out.

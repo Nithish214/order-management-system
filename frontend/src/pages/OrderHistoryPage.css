@@ -60,3 +60,15 @@
   flex-wrap: wrap;
   gap: var(--space-3);
 }
+
+/* .skeleton-text/.skeleton-pill themselves (the base shapes) live in the shared
+   Skeleton.css -- these are just this page's own width overrides, matching
+   .history-order-link's typical "Order #NN" width and .history-row-meta's combined
+   price+date width. */
+.skeleton-order-link {
+  width: 90px;
+}
+
+.skeleton-order-meta {
+  width: 180px;
+}

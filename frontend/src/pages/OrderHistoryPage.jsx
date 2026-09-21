@@ -5,10 +5,33 @@ import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import StatusBadge from "../components/StatusBadge";
 import AppHeader from "../components/AppHeader";
-import Spinner from "../components/Spinner";
 import ErrorState from "../components/ErrorState";
+import Skeleton from "../components/Skeleton";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./OrderHistoryPage.css";
+
+// A handful of these, not a spinner -- this list always resolves into the same shape (a
+// title + a status pill, then a price + date line), predictable enough that showing
+// that shape early reads as "this is about to be your order list." A fixed, small count
+// -- unlike the real list, there's no known number of orders to guess at ahead of time,
+// so this just needs to look like "a few rows," not match the eventual real count.
+const SKELETON_ROW_COUNT = 3;
+
+function OrderHistorySkeleton() {
+  return (
+    <ul className="history-list">
+      {Array.from({ length: SKELETON_ROW_COUNT }, (_, index) => (
+        <li className="history-row" key={index}>
+          <div className="history-row-main">
+            <Skeleton className="skeleton-text skeleton-order-link" />
+            <Skeleton className="skeleton-pill" />
+          </div>
+          <Skeleton className="skeleton-text skeleton-order-meta" />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default function OrderHistoryPage() {
   useDocumentTitle("Order history");
@@ -61,9 +84,13 @@ export default function OrderHistoryPage() {
       <>
         <AppHeader />
         <div className="history-page">
-          <p className="text-muted loading-row">
-            <Spinner /> Loading order history...
+          <p>
+            <Link to="/" className="back-link">
+              &larr; Back to products
+            </Link>
           </p>
+          <h1>Order history</h1>
+          <OrderHistorySkeleton />
         </div>
       </>
     );
