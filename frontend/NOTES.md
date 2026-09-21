@@ -52,3 +52,18 @@ name underlining — added a border-color transition to the accent color on hove
 (`ProductsPage.css`), consistent with this design's own "borders over shadows" structure
 principle (see `tokens.css`'s comment on that) rather than introducing the one drop
 shadow anywhere in the app. Respects `prefers-reduced-motion`.
+
+## Section 3: Checkout flow
+
+Cart page (line items, adjustable quantities, running total, "Place order" CTA) and the
+order status page's multi-stage pipeline (already correct for PENDING/CONFIRMED/REJECTED)
+were both already solid — no changes needed structurally.
+
+**The one real gap**: checkout success was just a silent `navigate()` to the order status
+page, with nothing distinguishing "you just placed this" from "you're revisiting an order
+from an hour ago." Fixed by passing `{ state: { justPlaced: true } }` through that
+navigation (`CartSummary.jsx`) and showing a genuine "🎉 Order placed!" banner on the
+order status page for that one page load — auto-fades after 5s, also dismissable by hand,
+respects `prefers-reduced-motion`. Captured once into local state on mount rather than
+read fresh on every render, so it doesn't reappear on the page's own 3s status-polling
+re-renders.

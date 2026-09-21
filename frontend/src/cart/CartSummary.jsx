@@ -78,7 +78,13 @@ export default function CartSummary() {
 
       const order = await response.json();
       cart.clear();
-      navigate(`/orders/${order.id}`);
+      // Tells the order status page this is the exact moment checkout just succeeded
+      // (see its own justPlaced state), so it can show a real "Order placed!" moment
+      // instead of arriving looking identical to someone just checking on an order they
+      // placed five minutes ago. Router state, not a query param -- it's only meaningful
+      // for this one navigation and shouldn't linger in the URL if the page is shared or
+      // reloaded.
+      navigate(`/orders/${order.id}`, { state: { justPlaced: true } });
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {

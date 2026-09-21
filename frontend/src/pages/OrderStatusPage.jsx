@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
@@ -22,10 +22,16 @@ export default function OrderStatusPage() {
   // the hood, tied to whatever pattern you wrote in <Route path="/orders/:id">.
   const { id } = useParams();
   const apiFetch = useApiFetch();
+  const location = useLocation();
   const { currencyCode, formatPrice } = useCurrency();
   const [order, setOrder] = useState(null);
   const [error, setError] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  // Captured once, from CartSummary's navigate() call, not read fresh on every render --
+  // location.state stays around across the 3s polling re-renders this page already does,
+  // and this banner should only ever show for the one page load right after checkout, not
+  // reappear every time the poll tick happens to re-render this component.
+  const [justPlaced, setJustPlaced] = useState(() => Boolean(location.state?.justPlaced));
 
   useDocumentTitle(order ? `Order #${order.id}` : "Order status");
 
@@ -101,6 +107,16 @@ export default function OrderStatusPage() {
     }
   }
 
+  // Auto-fades after a few seconds -- long enough to actually read, short enough that it
+  // doesn't sit around competing with the pipeline for attention once its one job (the
+  // "yes, that worked" moment) is done. Still dismissable by hand too (see the button in
+  // the JSX below), for anyone who wants it gone sooner.
+  useEffect(() => {
+    if (!justPlaced) return;
+    const timeoutId = setTimeout(() => setJustPlaced(false), 5000);
+    return () => clearTimeout(timeoutId);
+  }, [justPlaced]);
+
   if (error) {
     return (
       <>
@@ -130,6 +146,23 @@ export default function OrderStatusPage() {
           </Link>
         </p>
         <h1>Order #{order.id}</h1>
+
+        {/* The actual "yes, that worked" moment -- previously checkout just silently
+            navigated here with nothing distinguishing it from someone revisiting an
+            order they placed an hour ago. */}
+        {justPlaced && (
+          <div className="order-placed-banner" role="status">
+            <span>🎉 Order placed! We&rsquo;ll keep you updated below.</span>
+            <button
+              type="button"
+              className="order-placed-dismiss"
+              onClick={() => setJustPlaced(false)}
+              aria-label="Dismiss"
+            >
+              &times;
+            </button>
+          </div>
+        )}
 
         <Stepper status={order.status} />
         {/* key={order.status}: forces a fresh element (and a fresh play of its entrance

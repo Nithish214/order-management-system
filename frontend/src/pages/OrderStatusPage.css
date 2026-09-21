@@ -18,6 +18,42 @@
   margin-bottom: var(--space-5);
 }
 
+/* The one-time "order placed" moment (see justPlaced in the JSX) -- success-tinted like
+   the CONFIRMED outcome below, but deliberately a separate, simpler element rather than
+   reusing .outcome: this is announcing the checkout action just succeeded, not judging
+   the order's own current status (which is almost always still PENDING the instant this
+   shows, before the pipeline itself has settled). */
+.order-placed-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-4);
+  background: var(--color-success-subtle);
+  border: var(--border-width) solid var(--color-success);
+  border-radius: var(--radius-control);
+  color: var(--color-success);
+  font-weight: var(--font-weight-semibold);
+  animation: outcome-enter 0.35s ease;
+}
+
+.order-placed-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: var(--text-lg-size);
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order-placed-banner {
+    animation: none;
+  }
+}
+
 /* ---- The pipeline ---- */
 
 .pipeline {
