@@ -8,6 +8,7 @@ import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "product")
@@ -66,4 +67,22 @@ public class Product {
     // ProductController's PUT .../video).
     @Column(name = "video_url", length = 500)
     private String videoUrl;
+
+    // Null for any product that's never had one written -- currently every product
+    // seeded before the 300-product bulk-generation script (V16) has a real, specific
+    // one; the bulk-generated products don't, and ProductDetailPage renders nothing
+    // rather than an empty "Description" heading in that case.
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    // 3-5 attributes, key/value, genuinely relevant to THIS product -- deliberately not
+    // a fixed set of columns (a book's "Author"/"Format" and a blender's "Capacity"/
+    // "Power" have nothing in common), and deliberately not native Postgres JSONB (see
+    // SpecsConverter's own comment on why a plain TEXT column + converter is the
+    // simpler, more portable choice here). Empty map, not null, for a product with none
+    // -- same "absent means none, not a null to null-check everywhere" reasoning as
+    // Product#images defaulting to an empty list.
+    @Convert(converter = SpecsConverter.class)
+    @Column(columnDefinition = "TEXT")
+    private Map<String, String> specs = Map.of();
 }

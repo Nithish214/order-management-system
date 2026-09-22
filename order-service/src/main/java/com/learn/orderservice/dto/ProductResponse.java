@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 // NON_NULL, specifically for sku below: when a caller isn't allowed to see it, the field
 // is omitted from the JSON entirely ("this was never sent") rather than present as
@@ -32,6 +33,13 @@ public class ProductResponse {
     // (see the class's NON_NULL setting above), same "absent means none" convention as
     // sku being redacted, rather than a literal "videoUrl": null.
     private String videoUrl;
+    // Null (omitted from the JSON) for a product that's never had one written -- see
+    // Product entity's own comment on which products currently do.
+    private String description;
+    // Empty, not null, for a product with no specs -- an empty JSON object ({}) is a
+    // simpler thing for the frontend to render (map over zero entries) than a field
+    // that's sometimes absent and sometimes an object.
+    private Map<String, String> specs;
 
     // Includes sku -- safe default for callers that are already guaranteed admin-only by
     // SecurityConfig (addProductImage, deleteProductImage), unlike the three read
@@ -56,6 +64,8 @@ public class ProductResponse {
         response.setCategory(product.getCategory());
         response.setImages(product.getImages().stream().map(ProductImageResponse::from).toList());
         response.setVideoUrl(product.getVideoUrl());
+        response.setDescription(product.getDescription());
+        response.setSpecs(product.getSpecs());
         return response;
     }
 }

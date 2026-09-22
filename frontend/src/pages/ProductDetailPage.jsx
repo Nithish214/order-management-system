@@ -28,6 +28,10 @@ const MAX_IMAGES_PER_PRODUCT = 6;
 // every modern browser plays natively with a plain <video> tag.
 const ACCEPTED_VIDEO_TYPES = "video/mp4,video/webm";
 
+// 3-4 reads as a real "row," not a single lonely card or an overwhelming full grid --
+// see loadRelated below for why this is also the page size requested from the server.
+const RELATED_PRODUCT_COUNT = 4;
+
 export default function ProductDetailPage() {
   const { id } = useParams();
   const apiFetch = useApiFetch();
@@ -39,6 +43,12 @@ export default function ProductDetailPage() {
   const videoFileInputRef = useRef(null);
 
   const [product, setProduct] = useState(null);
+  // Separate from `product`/`loading` on purpose -- a slow or failed related-products
+  // fetch should never block or fail the actual product page around it. Starts empty,
+  // not undefined, so "still loading" and "genuinely none" both just render nothing
+  // until this fills in -- see the render below, which only shows the section once it
+  // has something to show.
+  const [relatedProducts, setRelatedProducts] = useState([]);
   // Undefined until the /stock fetch resolves, distinct from null/0 -- StockCount treats
   // undefined the same as "don't know yet, say nothing", same reasoning as ProductsPage's
   // stockByProductId map simply not having an entry yet.
@@ -106,6 +116,54 @@ export default function ProductDetailPage() {
       cancelled = true;
     };
   }, [id, apiFetch, isAdmin, retryCount]);
+
+  // A separate effect, not folded into loadProduct above, specifically so a slow or
+  // failed related-products call can never delay or break showing the actual product --
+  // this page's real job. Depends on product?.id/product?.category (stable primitives),
+  // not the whole `product` object -- an admin uploading an image or restocking replaces
+  // `product` with a new object reference every time, which would otherwise re-fetch
+  // "related products" on every single one of those unrelated actions.
+  useEffect(() => {
+    if (!product) return;
+    let cancelled = false;
+
+    async function loadRelated() {
+      try {
+        // Reuses GET /products (the same endpoint the product grid itself calls), no
+        // new backend work -- one extra result requested beyond RELATED_PRODUCT_COUNT,
+        // since this product itself is always among its own category's results and
+        // gets filtered out below; asking for one extra means a full row still shows
+        // up rather than sometimes one card short.
+        const params = new URLSearchParams({
+          category: product.category,
+          size: String(RELATED_PRODUCT_COUNT + 1),
+        });
+        const response = await apiFetch(`/products?${params}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled) {
+          setRelatedProducts(
+            data.content.filter((p) => p.id !== product.id).slice(0, RELATED_PRODUCT_COUNT)
+          );
+        }
+      } catch {
+        // Best-effort, same reasoning as ProductsPage's own category-sidebar fetch --
+        // a "You might also like" row failing to load isn't worth an error message on
+        // a page whose actual job (showing this one product) already succeeded.
+      }
+    }
+
+    loadRelated();
+    return () => {
+      cancelled = true;
+    };
+    // Deliberately product?.id/product?.category, not `product` itself -- the lint rule
+    // can't tell "re-run because the category changed" apart from "re-run because this
+    // object reference changed for any reason at all," and here it's specifically the
+    // latter (an admin's image upload, a restock) that this effect must NOT react to --
+    // see this effect's own opening comment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiFetch, product?.id, product?.category]);
 
   function handleAddToCart() {
     cart.addItem(product, quantity);
@@ -388,6 +446,35 @@ export default function ProductDetailPage() {
             </p>
           )}
 
+          {/* The right column's real content -- absent only for the 300 bulk-generated
+              products (see Product entity's own comment), which render neither section
+              rather than an empty "Description" heading or a specs table with zero rows. */}
+          {product.description && (
+            <div className="detail-description">
+              <h2>Description</h2>
+              <p>{product.description}</p>
+            </div>
+          )}
+
+          {Object.keys(product.specs ?? {}).length > 0 && (
+            <div className="detail-specs">
+              <h2>Specifications</h2>
+              {/* A dl/dt/dd list, not a <table> -- this is name/value pairs, not tabular
+                  data with meaningful columns, and specs is a Map so insertion order
+                  (the order each migration's JSON was written in, e.g. Author before
+                  Format for a book) is what decides display order here, same as
+                  product.images relies on query order for which image is the cover. */}
+              <dl className="detail-specs-list">
+                {Object.entries(product.specs).map(([key, value]) => (
+                  <div className="detail-specs-row" key={key}>
+                    <dt>{key}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+
           {isAdmin && (
             <div className="detail-admin">
               <input
@@ -446,6 +533,32 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+        {/* Outside detail-layout on purpose -- this is a full-width row below the
+            two-column area, not a third column squeezed into it. Empty until the
+            related-products effect above resolves (or if it comes back with nothing,
+            e.g. a single-product category), so there's no empty heading in the
+            meantime. */}
+        {relatedProducts.length > 0 && (
+          <div className="related-products">
+            <h2>You might also like</h2>
+            <div className="related-products-grid">
+              {relatedProducts.map((related) => (
+                <Link key={related.id} to={`/products/${related.id}`} className="related-product-card">
+                  <div className="related-product-image">
+                    {related.images?.[0] ? (
+                      <img src={related.images[0].imageUrl} alt={related.name} />
+                    ) : (
+                      <div className="related-product-image-placeholder" aria-hidden="true" />
+                    )}
+                  </div>
+                  <p className="related-product-name">{related.name}</p>
+                  <p className="related-product-price">{formatPrice(related.unitPrice)}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
