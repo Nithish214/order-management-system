@@ -7,6 +7,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.codec.json.Jackson2JsonDecoder;
 import org.springframework.http.codec.json.Jackson2JsonEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -27,15 +30,23 @@ import java.util.Map;
 public class CognitoAuthClient {
 
     private final WebClient webClient;
+    // Separate client, separate base URL -- the Hosted UI domain's /oauth2/token endpoint
+    // is a completely different surface from cognito-idp.<region>.amazonaws.com above (see
+    // this field's own comment further down, and application.yml's cognito.domain
+    // comment). Standard OAuth2 form-encoded request/JSON response, none of the
+    // "application/x-amz-json-1.1" awkwardness webClient above exists to work around.
+    private final WebClient oauth2WebClient;
     private final ObjectMapper objectMapper;
     private final String clientId;
 
     public CognitoAuthClient(
             @Value("${cognito.region}") String region,
             @Value("${cognito.client-id}") String clientId,
+            @Value("${cognito.domain}") String domain,
             ObjectMapper objectMapper) {
         this.clientId = clientId;
         this.objectMapper = objectMapper;
+        this.oauth2WebClient = WebClient.builder().baseUrl(domain).build();
         // Cognito's JSON API uses "application/x-amz-json-1.1" as its content type --
         // genuinely just JSON, but a non-standard media type string, and Spring's default
         // Jackson codecs only recognize a fixed allowlist (application/json,
@@ -82,6 +93,53 @@ public class CognitoAuthClient {
     // from AuthController's point of view -- see its comment there.
     public Mono<Void> globalSignOut(String accessToken) {
         return call("GlobalSignOut", Map.of("AccessToken", accessToken)).then();
+    }
+
+    // The other half of Google sign-in (see AuthController's /auth/google/callback): the
+    // frontend already redirected the browser to Cognito's Hosted UI, the user picked
+    // "Continue with Google" and approved there, and Cognito redirected back with a
+    // one-time authorization code. This exchanges that code for real tokens -- the one
+    // step that has to happen server-side, so the resulting refresh token can go straight
+    // into the same httpOnly cookie login()/refresh() above already use, never touching
+    // browser JavaScript.
+    //
+    // codeVerifier is PKCE (RFC 7636): the frontend generated a random secret before
+    // redirecting to Google, sent only its SHA-256 hash (the "code_challenge") in that
+    // redirect, and kept the actual secret in sessionStorage. Cognito already recorded
+    // that hash against this authorization code; presenting the matching original secret
+    // here is what proves this exchange request came from the same browser session that
+    // started the login, not a code intercepted somewhere in transit.
+    public Mono<JsonNode> exchangeAuthorizationCode(String code, String redirectUri, String codeVerifier) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "authorization_code");
+        form.add("client_id", clientId);
+        form.add("code", code);
+        form.add("redirect_uri", redirectUri);
+        form.add("code_verifier", codeVerifier);
+
+        return oauth2WebClient.post()
+                .uri("/oauth2/token")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData(form))
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .onErrorResume(WebClientResponseException.class, ex -> Mono.error(toOAuth2AuthException(ex)));
+    }
+
+    // Standard OAuth2 error shape ({"error": "...", "error_description": "..."}) --
+    // deliberately NOT toAuthException below, which parses Cognito's own proprietary JSON
+    // API error shape ({"__type": "...", "message": "..."}) that InitiateAuth/
+    // GlobalSignOut use. The /oauth2/token endpoint is the standard OAuth2 surface, not
+    // that proprietary API, so it fails in this differently-shaped way instead.
+    private CognitoAuthException toOAuth2AuthException(WebClientResponseException ex) {
+        try {
+            JsonNode error = objectMapper.readTree(ex.getResponseBodyAsString());
+            return new CognitoAuthException(
+                    error.path("error").asText(""),
+                    error.path("error_description").asText(ex.getMessage()));
+        } catch (Exception parseFailure) {
+            return new CognitoAuthException("", ex.getMessage());
+        }
     }
 
     private Mono<JsonNode> call(String target, Map<String, Object> body) {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signUp, confirmSignUp } from "../auth/cognito";
 import { useAuth } from "../auth/AuthContext";
+import GoogleSignInButton from "../auth/GoogleSignInButton";
 import { friendlyErrorMessage } from "../utils/errors";
 import Spinner from "../components/Spinner";
 import Logo from "../components/Logo";
@@ -94,6 +95,11 @@ export default function SignupPage() {
               {loading ? "Creating account..." : "Create account"}
             </button>
           </form>
+          <p className="auth-divider">or</p>
+          {/* Google accounts skip the confirmation-code step entirely below -- Google
+              already verified this email, so there's nothing left for Cognito to confirm
+              the way a fresh password signup's own email needs confirming. */}
+          <GoogleSignInButton />
           <p className="auth-footer">
             <Link to="/login">Already have an account? Log in</Link>
           </p>

@@ -35,6 +35,7 @@ pipeline {
         // Gateway's own side of the same Cognito app client.
         VITE_COGNITO_REGION = 'eu-west-1'
         VITE_COGNITO_CLIENT_ID = '48v29rgvebkkaj46cjuo4vqjb5'
+        VITE_COGNITO_DOMAIN = 'https://nithish-ordermgmt-auth.auth.eu-west-1.amazoncognito.com'
         AWS_REGION = 'eu-west-1'
     }
 
@@ -128,6 +129,7 @@ pipeline {
 VITE_GATEWAY_URL=https://${GATEWAY_HOST}
 VITE_COGNITO_REGION=${VITE_COGNITO_REGION}
 VITE_COGNITO_CLIENT_ID=${VITE_COGNITO_CLIENT_ID}
+VITE_COGNITO_DOMAIN=${VITE_COGNITO_DOMAIN}
 EOF
                         npm ci && npm run lint && npm run build
                     '''

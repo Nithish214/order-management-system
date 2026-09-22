@@ -171,6 +171,13 @@ resilience4j:
 cognito:
   region: ${COGNITO_REGION:eu-west-1}
   client-id: ${COGNITO_CLIENT_ID:48v29rgvebkkaj46cjuo4vqjb5}
+  # The Hosted UI domain (Branding -> Domain in the Cognito console), a completely
+  # different endpoint from cognito-idp.<region>.amazonaws.com above -- that one is
+  # Cognito's proprietary JSON API (InitiateAuth, GlobalSignOut), this one is the
+  # standard OAuth2 /oauth2/token endpoint, the only one that can exchange a Google
+  # sign-in's authorization code for tokens (federated identity providers only ever
+  # flow through the OAuth2/Hosted-UI surface, never through InitiateAuth).
+  domain: ${COGNITO_DOMAIN:https://nithish-ordermgmt-auth.auth.eu-west-1.amazoncognito.com}
 
 # The exact origins the frontend is actually served from -- see SecurityConfig's
 # corsConfigurationSource() for why this can no longer be "*" now that /auth/login and

@@ -69,8 +69,10 @@ public class SecurityConfig {
                         .pathMatchers("/actuator/health").permitAll()
                         // Login has no token yet by definition; refresh only ever has the httpOnly
                         // cookie (no Bearer token); logout must still work against an
-                        // already-expired access token. See AuthController.
-                        .pathMatchers(HttpMethod.POST, "/auth/login", "/auth/refresh", "/auth/logout").permitAll()
+                        // already-expired access token. google/callback is the same "no token yet"
+                        // case as login -- it's the request that's exchanging a Google/Cognito
+                        // authorization code for the very first access token. See AuthController.
+                        .pathMatchers(HttpMethod.POST, "/auth/login", "/auth/refresh", "/auth/logout", "/auth/google/callback").permitAll()
                         // Stock levels are admin-only information, full stop -- not just hidden in
                         // the frontend (ProductsPage/ProductDetailPage only render/fetch this for
                         // isAdmin), enforced here too so a non-admin genuinely can't see it, not

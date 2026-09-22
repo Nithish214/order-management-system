@@ -1,6 +1,23 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { bffLogin, bffLogout, bffRefresh } from "./bff";
+import { bffGoogleCallback, bffLogin, bffLogout, bffRefresh } from "./bff";
+import { takeStoredCodeVerifier } from "./google";
 import { decodeJwtPayload } from "../utils/jwt";
+
+// Shared by the login() password path and the Google-callback path in the bootstrap
+// effect below -- both end up needing to run the exact same "tell order-service the
+// real email" call once a fresh access token exists, just from different starting
+// points (a typed-in password form vs. an email Cognito/Google already knew). See
+// login()'s own comment for why this is a plain fetch rather than useApiFetch().
+function syncProfileEmail(accessToken, email) {
+  fetch(`${import.meta.env.VITE_GATEWAY_URL}/users/me`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ email }),
+  }).catch(() => {});
+}
 
 // React Context solves one specific problem: passing data (here, the access token and
 // login/logout functions) to components anywhere in the tree without manually threading
@@ -47,7 +64,32 @@ export function AuthProvider({ children }) {
   // behavior of quietly restoring their session even there. Since this app doesn't
   // treat "authenticated" as retroactive that visit only lasts until they either log in
   // again or reload on a different page.
+  // Runs before the /login,/signup skip-check below on purpose -- Cognito's Hosted UI
+  // redirects back to this app's bare origin (the "Allowed callback URLs" registered on
+  // the app client, no path), which normally lands on "/" and gets treated as an ordinary
+  // page load, but the query string carries a one-time authorization code that needs to
+  // be consumed exactly once, session-wide, regardless of which page that redirect
+  // happened to land on.
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    if (code) {
+      const codeVerifier = takeStoredCodeVerifier();
+      // Strip the code out of the URL immediately, before the exchange even resolves --
+      // it's single-use (Cognito rejects a replay), so leaving it in the URL would turn a
+      // simple page refresh into a broken "authorization code already used" error instead
+      // of just... reloading the page.
+      window.history.replaceState({}, "", window.location.pathname);
+      bffGoogleCallback(code, window.location.origin, codeVerifier)
+        .then((result) => {
+          if (!result) return;
+          setAccessToken(result.accessToken);
+          if (result.email) syncProfileEmail(result.accessToken, result.email);
+        })
+        .finally(() => setIsBootstrapping(false));
+      return;
+    }
+
     const path = window.location.pathname;
     if (path === "/login" || path === "/signup") {
       setIsBootstrapping(false);
@@ -70,21 +112,14 @@ export function AuthProvider({ children }) {
     const result = await bffLogin(email, password);
     setAccessToken(result.accessToken);
 
-    // Sync the real email onto app_user right away -- a plain fetch here rather than
-    // useApiFetch(), deliberately: useApiFetch() reads the token via useAuth(), but
-    // setAccessToken above hasn't actually applied yet at this point in the function
+    // Sync the real email onto app_user right away -- deliberately a plain fetch
+    // (syncProfileEmail), not useApiFetch(): useApiFetch() reads the token via useAuth(),
+    // but setAccessToken above hasn't actually applied yet at this point in the function
     // (React state updates aren't synchronous), so useApiFetch() would still see the
     // *old* (null) token if called here. We already have the fresh token directly in
-    // `result`, so just using it in a plain fetch sidesteps that entirely. Best-effort:
-    // a failure here shouldn't block login itself.
-    fetch(`${import.meta.env.VITE_GATEWAY_URL}/users/me`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${result.accessToken}`,
-      },
-      body: JSON.stringify({ email }),
-    }).catch(() => {});
+    // `result`, so passing it explicitly sidesteps that entirely. Best-effort: a failure
+    // here shouldn't block login itself.
+    syncProfileEmail(result.accessToken, email);
   }, []);
 
   // The one function that actually needs a fresh access token mid-session, without the

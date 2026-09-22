@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import GoogleSignInButton from "../auth/GoogleSignInButton";
 import { friendlyErrorMessage } from "../utils/errors";
 import Spinner from "../components/Spinner";
 import Logo from "../components/Logo";
@@ -69,6 +70,8 @@ export default function LoginPage() {
           {loading ? "Logging in..." : "Log in"}
         </button>
       </form>
+      <p className="auth-divider">or</p>
+      <GoogleSignInButton />
       <p className="auth-footer">
         <Link to="/signup">Don't have an account? Sign up</Link>
       </p>

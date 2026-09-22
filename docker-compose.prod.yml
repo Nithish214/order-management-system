@@ -222,6 +222,9 @@ services:
       # .env values they mirror -- hardcoded directly for the same reason JAVA_OPTS is.
       COGNITO_REGION: eu-west-1
       COGNITO_CLIENT_ID: 48v29rgvebkkaj46cjuo4vqjb5
+      # Same "not a secret" reasoning as COGNITO_CLIENT_ID above -- this is the public
+      # Hosted UI domain the browser itself gets redirected to during Google sign-in.
+      COGNITO_DOMAIN: https://nithish-ordermgmt-auth.auth.eu-west-1.amazoncognito.com
       # Exact origin(s) the frontend is served from -- required now that /auth/login and
       # /auth/refresh use a credentialed (cookie-carrying) cross-site request; CORS
       # forbids "*" once allowCredentials(true) is in play. See SecurityConfig.

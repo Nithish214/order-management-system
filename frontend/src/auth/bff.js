@@ -57,6 +57,21 @@ export async function bffRefresh() {
   }
 }
 
+// The server-side leg of Google sign-in -- see google.js (the redirect out) and
+// AuthContext's bootstrap effect (what calls this on the way back). Same response shape
+// as bffLogin/bffRefresh, plus `email`: Google/Cognito already knows it, but nothing on
+// this end typed it into a form the way password login's email is already known.
+export async function bffGoogleCallback(code, redirectUri, codeVerifier) {
+  const response = await fetch(`${GATEWAY_URL}/auth/google/callback`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, redirectUri, codeVerifier }),
+  });
+  if (!response.ok) return null;
+  return response.json(); // { accessToken, expiresIn, email }
+}
+
 // Best-effort by design -- see AuthContext's logout(), which clears the in-memory access
 // token regardless of whether this call even succeeds.
 export async function bffLogout(accessToken) {
