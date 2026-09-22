@@ -107,19 +107,18 @@ public class CognitoAuthClient {
     // into the same httpOnly cookie login()/refresh() above already use, never touching
     // browser JavaScript.
     //
-    // codeVerifier is PKCE (RFC 7636): the frontend generated a random secret before
-    // redirecting to Google, sent only its SHA-256 hash (the "code_challenge") in that
-    // redirect, and kept the actual secret in sessionStorage. Cognito already recorded
-    // that hash against this authorization code; presenting the matching original secret
-    // here is what proves this exchange request came from the same browser session that
-    // started the login, not a code intercepted somewhere in transit.
-    public Mono<JsonNode> exchangeAuthorizationCode(String code, String redirectUri, String codeVerifier) {
+    // No PKCE (code_verifier) here -- tried first, but Cognito rejected the exchange with
+    // invalid_grant on every attempt specifically for the federated (Google) path, even
+    // with byte-for-byte correct redirect_uri and code_verifier values (see google.js's own
+    // comment on the frontend side). Dropping it is a reasonable trade regardless: this
+    // exchange already only ever happens server-side, never in browser JS, which is the
+    // exact class of interception PKCE exists to guard against for a public client.
+    public Mono<JsonNode> exchangeAuthorizationCode(String code, String redirectUri) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "authorization_code");
         form.add("client_id", clientId);
         form.add("code", code);
         form.add("redirect_uri", redirectUri);
-        form.add("code_verifier", codeVerifier);
 
         return oauth2WebClient.post()
                 .uri("/oauth2/token")

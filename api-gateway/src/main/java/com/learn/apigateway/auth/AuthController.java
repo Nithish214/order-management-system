@@ -46,7 +46,7 @@ public class AuthController {
     public record LoginRequest(String email, String password) {
     }
 
-    public record GoogleCallbackRequest(String code, String redirectUri, String codeVerifier) {
+    public record GoogleCallbackRequest(String code, String redirectUri) {
     }
 
     // email is null for password login/refresh -- the frontend already has the email
@@ -106,7 +106,7 @@ public class AuthController {
     @PostMapping("/google/callback")
     public Mono<ResponseEntity<TokenResponse>> googleCallback(
             @RequestBody GoogleCallbackRequest request, ServerWebExchange exchange) {
-        return cognitoAuthClient.exchangeAuthorizationCode(request.code(), request.redirectUri(), request.codeVerifier())
+        return cognitoAuthClient.exchangeAuthorizationCode(request.code(), request.redirectUri())
                 .map(result -> {
                     setRefreshCookie(exchange, result.get("refresh_token").asText());
                     String email = decodeEmailFromIdToken(result.get("id_token").asText());

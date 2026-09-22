@@ -61,12 +61,12 @@ export async function bffRefresh() {
 // AuthContext's bootstrap effect (what calls this on the way back). Same response shape
 // as bffLogin/bffRefresh, plus `email`: Google/Cognito already knows it, but nothing on
 // this end typed it into a form the way password login's email is already known.
-export async function bffGoogleCallback(code, redirectUri, codeVerifier) {
+export async function bffGoogleCallback(code, redirectUri) {
   const response = await fetch(`${GATEWAY_URL}/auth/google/callback`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, redirectUri, codeVerifier }),
+    body: JSON.stringify({ code, redirectUri }),
   });
   if (!response.ok) return null;
   return response.json(); // { accessToken, expiresIn, email }

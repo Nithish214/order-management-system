@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { bffGoogleCallback, bffLogin, bffLogout, bffRefresh } from "./bff";
-import { takeStoredCodeVerifier } from "./google";
 import { decodeJwtPayload } from "../utils/jwt";
 
 // Shared by the login() password path and the Google-callback path in the bootstrap
@@ -74,13 +73,12 @@ export function AuthProvider({ children }) {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     if (code) {
-      const codeVerifier = takeStoredCodeVerifier();
       // Strip the code out of the URL immediately, before the exchange even resolves --
       // it's single-use (Cognito rejects a replay), so leaving it in the URL would turn a
       // simple page refresh into a broken "authorization code already used" error instead
       // of just... reloading the page.
       window.history.replaceState({}, "", window.location.pathname);
-      bffGoogleCallback(code, window.location.origin, codeVerifier)
+      bffGoogleCallback(code, window.location.origin)
         .then((result) => {
           if (!result) return;
           setAccessToken(result.accessToken);
