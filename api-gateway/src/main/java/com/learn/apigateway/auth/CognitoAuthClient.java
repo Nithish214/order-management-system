@@ -2,6 +2,8 @@ package com.learn.apigateway.auth;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.json.Jackson2JsonDecoder;
@@ -28,6 +30,8 @@ import java.util.Map;
 // composes into that same non-blocking pipeline instead of parking a thread per request.
 @Component
 public class CognitoAuthClient {
+
+    private static final Logger log = LoggerFactory.getLogger(CognitoAuthClient.class);
 
     private final WebClient webClient;
     // Separate client, separate base URL -- the Hosted UI domain's /oauth2/token endpoint
@@ -132,6 +136,14 @@ public class CognitoAuthClient {
     // GlobalSignOut use. The /oauth2/token endpoint is the standard OAuth2 surface, not
     // that proprietary API, so it fails in this differently-shaped way instead.
     private CognitoAuthException toOAuth2AuthException(WebClientResponseException ex) {
+        // WARN, not silently swallowed -- an auth failure here is either a real user-facing
+        // problem (worth being able to explain after the fact) or a misconfiguration
+        // (redirect_uri mismatch, a stale/reused code, PKCE verifier mismatch) that's
+        // otherwise invisible: AuthController's own error handling deliberately returns an
+        // empty-body 401/400 to the browser, so this log line is the only place the actual
+        // reason ever surfaces.
+        log.warn("Google/Cognito OAuth2 token exchange failed: HTTP {} body={}",
+                ex.getStatusCode(), ex.getResponseBodyAsString());
         try {
             JsonNode error = objectMapper.readTree(ex.getResponseBodyAsString());
             return new CognitoAuthException(
