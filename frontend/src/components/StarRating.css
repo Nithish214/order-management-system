@@ -1,0 +1,18 @@
+.star-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.star-rating-button {
+  display: inline-flex;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+}
+
+.star-rating-button:hover .star-rating-star path {
+  fill: var(--color-accent);
+}

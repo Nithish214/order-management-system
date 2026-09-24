@@ -140,6 +140,13 @@
   margin: 0 0 var(--space-3);
 }
 
+.detail-rating-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
 .detail-price {
   font-size: var(--text-lg-size);
   line-height: var(--text-lg-line);
@@ -228,6 +235,94 @@
 
 .detail-stock {
   margin: 0 0 var(--space-4);
+}
+
+.detail-reviews {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.detail-reviews h2 {
+  font-size: var(--text-lg-size);
+  line-height: var(--text-lg-line);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--space-3);
+}
+
+/* A bordered card, same visual language as .detail-description/.detail-specs elsewhere
+   on this page -- distinguishes "write a review" as its own distinct action from the
+   plain list of existing reviews below it. */
+.review-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.review-form-label {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.review-form-comment {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-base-size);
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  resize: vertical;
+}
+
+.review-form-comment:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.review-list-item {
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.review-list-item:last-child {
+  border-bottom: none;
+}
+
+.review-list-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.review-list-author {
+  font-weight: var(--font-weight-semibold);
+}
+
+.review-list-date {
+  font-size: var(--text-xs-size);
+}
+
+.review-list-comment {
+  margin: 0;
+  color: var(--color-text);
 }
 
 .related-products {

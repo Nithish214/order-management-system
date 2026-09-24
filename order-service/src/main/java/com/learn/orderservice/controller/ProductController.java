@@ -13,6 +13,7 @@ import com.learn.orderservice.entity.Product;
 import com.learn.orderservice.entity.ProductImage;
 import com.learn.orderservice.repository.ProductImageRepository;
 import com.learn.orderservice.repository.ProductRepository;
+import com.learn.orderservice.repository.ReviewRepository;
 import com.learn.orderservice.service.ProductImageUploadService;
 import com.learn.orderservice.service.ProductVideoUploadService;
 import jakarta.persistence.EntityNotFoundException;
@@ -66,17 +67,20 @@ public class ProductController {
     private final ProductImageRepository productImageRepository;
     private final ProductImageUploadService productImageUploadService;
     private final ProductVideoUploadService productVideoUploadService;
+    private final ReviewRepository reviewRepository;
 
     public ProductController(
             ProductRepository productRepository,
             ProductImageRepository productImageRepository,
             ProductImageUploadService productImageUploadService,
-            ProductVideoUploadService productVideoUploadService
+            ProductVideoUploadService productVideoUploadService,
+            ReviewRepository reviewRepository
     ) {
         this.productRepository = productRepository;
         this.productImageRepository = productImageRepository;
         this.productImageUploadService = productImageUploadService;
         this.productVideoUploadService = productVideoUploadService;
+        this.reviewRepository = reviewRepository;
     }
 
     // Optional ?category= filters to one category; omitted (or blank) returns everything,
@@ -250,7 +254,14 @@ public class ProductController {
     ) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found: " + id));
-        return ResponseEntity.ok(ProductResponse.from(product, isAdmin));
+        ProductResponse response = ProductResponse.from(product, isAdmin);
+        // Only here, not on the list/search endpoints below -- see ProductResponse's own
+        // comment on averageRating for why a single extra query per product is fine for
+        // one product but not for a whole page of them.
+        ReviewRepository.RatingSummary ratingSummary = reviewRepository.getRatingSummary(id);
+        response.setAverageRating(ratingSummary.getAverageRating());
+        response.setReviewCount(ratingSummary.getReviewCount() != null ? ratingSummary.getReviewCount().intValue() : 0);
+        return ResponseEntity.ok(response);
     }
 
     // Step 1 of the upload flow: hands back a short-lived S3 URL the browser will PUT the

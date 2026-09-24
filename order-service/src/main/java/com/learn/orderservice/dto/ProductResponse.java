@@ -40,6 +40,18 @@ public class ProductResponse {
     // simpler thing for the frontend to render (map over zero entries) than a field
     // that's sometimes absent and sometimes an object.
     private Map<String, String> specs;
+    // Null (omitted from the JSON, via this class's NON_NULL setting) for a product with
+    // zero reviews -- distinct from a literal 0, which would misleadingly read as "rated
+    // zero stars" rather than "not yet rated at all". Only ever populated by
+    // ProductController's single-product GET (see its own comment) -- the list/search
+    // endpoints deliberately leave this null rather than pay for a bulk aggregate query
+    // across a whole page of products for what's a nice-to-have there, not the core of
+    // this feature.
+    private Double averageRating;
+    // 0, not null, even when averageRating is null -- "reviewCount": 0 is exactly true and
+    // needs no special-casing on the frontend, unlike averageRating's "no average exists"
+    // case above.
+    private int reviewCount;
 
     // Includes sku -- safe default for callers that are already guaranteed admin-only by
     // SecurityConfig (addProductImage, deleteProductImage), unlike the three read

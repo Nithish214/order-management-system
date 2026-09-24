@@ -3,12 +3,14 @@ import { Link, useParams } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { addProductImage, deleteProductImage } from "../api/productImages";
 import { setProductVideo, deleteProductVideo } from "../api/productVideos";
+import { getReviews, getReviewEligibility, createReview } from "../api/reviews";
 import { useCart } from "../cart/CartContext";
 import { useCurrency } from "../currency/CurrencyContext";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../toast/ToastContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
+import StarRating from "../components/StarRating";
 import Spinner from "../components/Spinner";
 import AppHeader from "../components/AppHeader";
 import ErrorState from "../components/ErrorState";
@@ -49,6 +51,17 @@ export default function ProductDetailPage() {
   // until this fills in -- see the render below, which only shows the section once it
   // has something to show.
   const [relatedProducts, setRelatedProducts] = useState([]);
+  // Same independence reasoning as relatedProducts above -- reviews are a below-the-fold
+  // addition to a page whose real job is showing the product itself.
+  const [reviews, setReviews] = useState([]);
+  // null until the eligibility check resolves -- distinct from {purchased: false, ...},
+  // which is a real, known answer. Used to hold off rendering the write-a-review form
+  // either way until there's an actual answer, rather than flashing it and then hiding it.
+  const [reviewEligibility, setReviewEligibility] = useState(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState(null);
   // Undefined until the /stock fetch resolves, distinct from null/0 -- StockCount treats
   // undefined the same as "don't know yet, say nothing", same reasoning as ProductsPage's
   // stockByProductId map simply not having an entry yet.
@@ -164,6 +177,61 @@ export default function ProductDetailPage() {
     // see this effect's own opening comment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiFetch, product?.id, product?.category]);
+
+  // Another independent effect, same reasoning as related products above -- a slow or
+  // failed reviews fetch shouldn't block or break the page around it. isAdmin excluded
+  // from eligibility fetching entirely: admin accounts can never place an order at all
+  // (see OrderController's own "Admin accounts cannot place orders" rule), so they could
+  // never legitimately pass the purchased check either -- skipping the call for them
+  // avoids a request that's guaranteed to come back {purchased: false}.
+  useEffect(() => {
+    if (!product) return;
+    let cancelled = false;
+
+    getReviews(apiFetch, product.id)
+      .then((data) => {
+        if (!cancelled) setReviews(data);
+      })
+      .catch(() => {});
+
+    if (!isAdmin) {
+      getReviewEligibility(apiFetch, product.id)
+        .then((data) => {
+          if (!cancelled) setReviewEligibility(data);
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiFetch, product?.id, isAdmin]);
+
+  async function handleSubmitReview(event) {
+    event.preventDefault();
+    if (reviewRating === 0) {
+      setReviewError("Pick a star rating first.");
+      return;
+    }
+    setSubmittingReview(true);
+    setReviewError(null);
+    try {
+      const created = await createReview(apiFetch, product.id, reviewRating, reviewComment.trim() || null);
+      // Newest first, matching the order the backend already returns the list in --
+      // prepending here means the just-submitted review appears immediately without
+      // waiting on (or duplicating) a full re-fetch of the whole list.
+      setReviews((prev) => [created, ...prev]);
+      setReviewEligibility((prev) => ({ ...prev, alreadyReviewed: true }));
+      setReviewRating(0);
+      setReviewComment("");
+      showToast("Review submitted. Thanks for the feedback!");
+    } catch (err) {
+      setReviewError(friendlyErrorMessage(err));
+    } finally {
+      setSubmittingReview(false);
+    }
+  }
 
   function handleAddToCart() {
     cart.addItem(product, quantity);
@@ -400,6 +468,16 @@ export default function ProductDetailPage() {
               regular customer needs to see. */}
           {isAdmin && <p className="detail-sku text-muted">{product.sku}</p>}
           <h1 className="detail-name">{product.name}</h1>
+          {/* Only once there's at least one real review -- a 0-star/"(0 reviews)" summary
+              on a product nobody's rated yet reads as a bad rating, not an absent one. */}
+          {product.reviewCount > 0 && (
+            <p className="detail-rating-summary">
+              <StarRating rating={product.averageRating} />
+              <span className="text-muted">
+                {product.averageRating.toFixed(1)} ({product.reviewCount} review{product.reviewCount === 1 ? "" : "s"})
+              </span>
+            </p>
+          )}
           <p className="detail-price">{formatPrice(product.unitPrice)}</p>
           {/* Admin-only -- a regular shopper never sees stock levels at all now, "Out of
               stock" included. A shopper CAN still add an out-of-stock item to their cart
@@ -533,6 +611,57 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+        {/* Outside detail-layout, same reasoning as related-products below -- a full-width
+            section, not squeezed into the narrower right column, since a real review list
+            (star + name + comment + date, per review) needs more room than that column
+            has to offer. */}
+        <div className="detail-reviews">
+          <h2>Reviews</h2>
+
+          {/* Only rendered once eligibility actually resolves (see reviewEligibility's own
+              comment) -- purchased-but-not-yet-reviewed is the one state that gets the
+              form; every other combination (not purchased, already reviewed, still
+              loading) shows nothing here rather than a form that would just reject the
+              submission. */}
+          {reviewEligibility?.purchased && !reviewEligibility.alreadyReviewed && (
+            <form className="review-form" onSubmit={handleSubmitReview}>
+              <p className="review-form-label">Write a review</p>
+              <StarRating rating={reviewRating} onChange={setReviewRating} size={24} />
+              <textarea
+                className="review-form-comment"
+                placeholder="What did you think? (optional)"
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                rows={3}
+              />
+              {reviewError && <p className="text-error">{reviewError}</p>}
+              <button type="submit" className="btn-primary" disabled={submittingReview}>
+                {submittingReview && <Spinner size={14} />}
+                {submittingReview ? "Submitting..." : "Submit review"}
+              </button>
+            </form>
+          )}
+
+          {reviews.length === 0 ? (
+            <p className="text-muted">No reviews yet.</p>
+          ) : (
+            <ul className="review-list">
+              {reviews.map((review) => (
+                <li key={review.id} className="review-list-item">
+                  <div className="review-list-header">
+                    <StarRating rating={review.rating} size={14} />
+                    <span className="review-list-author">{review.reviewerName}</span>
+                    <span className="text-muted review-list-date">
+                      {new Date(review.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {review.comment && <p className="review-list-comment">{review.comment}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         {/* Outside detail-layout on purpose -- this is a full-width row below the
             two-column area, not a third column squeezed into it. Empty until the
