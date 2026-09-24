@@ -67,6 +67,11 @@ public class SecurityConfig {
                         // the healthcheck would get a 401 and the Gateway would look permanently
                         // unhealthy regardless of whether it's actually fine.
                         .pathMatchers("/actuator/health").permitAll()
+                        // Same reasoning as /actuator/health above: the EC2/RDS monitor app
+                        // calls this directly to show per-container status, with no Cognito
+                        // login of its own (it authenticates to its own Lambda backend via a
+                        // separate API key, not this app's user accounts).
+                        .pathMatchers("/health/services").permitAll()
                         // Login has no token yet by definition; refresh only ever has the httpOnly
                         // cookie (no Bearer token); logout must still work against an
                         // already-expired access token. google/callback is the same "no token yet"
