@@ -180,7 +180,7 @@
 .pipeline-stage--done .pipeline-node {
   background: var(--color-text);
   border-color: var(--color-text);
-  color: #ffffff;
+  color: var(--color-bg);
 }
 
 .pipeline-stage--done .pipeline-label {
@@ -229,7 +229,7 @@
 .pipeline-stage--stopped .pipeline-node {
   background: var(--color-error);
   border-color: var(--color-error);
-  color: #ffffff;
+  color: var(--color-on-solid);
 }
 
 .pipeline-stage--stopped .pipeline-label {
@@ -246,7 +246,7 @@
 .pipeline-stage--success .pipeline-node {
   background: var(--color-success);
   border-color: var(--color-success);
-  color: #ffffff;
+  color: var(--color-on-solid);
 }
 
 .pipeline-stage--success .pipeline-label {
@@ -256,8 +256,8 @@
 
 /* Upcoming: not reached, and -- for "Confirmed" on a rejected/cancelled order -- never
    will be. Quiet on purpose; there's nothing to say about a stage that didn't happen. But
-   quiet still needs to be visible -- --color-border (#E2E4EA) against the page background
-   (#F7F8FA) is nearly invisible as an outline, so this uses the darker muted-text color
+   quiet still needs to be visible -- --color-border against the page background
+   is nearly invisible as an outline, so this uses the darker muted-text color
    instead, just for the node's own border/label, not the connector line leading into it. */
 .pipeline-stage--upcoming .pipeline-node {
   background: var(--color-bg);

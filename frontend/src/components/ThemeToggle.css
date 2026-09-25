@@ -1,0 +1,18 @@
+/* Same outlined treatment as .btn-secondary, squared up for a single icon. 32px keeps the
+   hit target comfortable next to the header's text links. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--color-text);
+  background: transparent;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.theme-toggle:hover {
+  border-color: var(--color-text-muted);
+}

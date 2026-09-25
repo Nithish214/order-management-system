@@ -12,7 +12,7 @@
   justify-content: center;
   flex-shrink: 0;
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-solid);
   border-radius: var(--radius-control);
 }
 

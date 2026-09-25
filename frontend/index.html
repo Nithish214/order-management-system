@@ -11,6 +11,21 @@
          this is only what shows for the instant before React mounts, or if JS is
          disabled. -->
     <title>Cartly</title>
+    <!-- Sets the theme BEFORE the first paint, so a dark-theme visitor never sees a white
+         flash while the JS bundle loads. Same rule as src/hooks/useTheme.js: a stored
+         choice wins, otherwise follow the OS. Runs synchronously in <head> on purpose. -->
+    <script>
+      (function () {
+        var theme = null;
+        try {
+          theme = localStorage.getItem("theme");
+        } catch (e) {}
+        if (theme !== "light" && theme !== "dark") {
+          theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
     <!-- Only the two weights the design direction specifies (400, 600) -- requesting more
          than the design actually uses is pure wasted download for every visitor. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

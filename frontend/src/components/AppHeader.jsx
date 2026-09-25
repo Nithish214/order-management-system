@@ -3,6 +3,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useCart } from "../cart/CartContext";
 import Logo from "./Logo";
 import { CartIcon } from "./icons";
+import ThemeToggle from "./ThemeToggle";
 import "./AppHeader.css";
 
 // Persistent across every signed-in page (Products, Order History, Order Status, Cart) --
@@ -30,6 +31,7 @@ export default function AppHeader() {
         </Link>
         {isAdmin && <Link to="/admin">Dashboard</Link>}
         {isAdmin && <span className="app-header-admin-badge">Admin</span>}
+        <ThemeToggle />
         <button onClick={logout} className="btn-secondary">
           Log out
         </button>

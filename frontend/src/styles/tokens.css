@@ -36,6 +36,19 @@
   --color-error-subtle: #fbe9e9;
   --color-pending-subtle: #fef3e2;
 
+  /* Text/icons sitting ON a solid accent/success/error fill (primary button, logo mark,
+     finished pipeline nodes). A token, not a literal white, because in the dark theme those
+     fills become light colors and white on them would be unreadable. */
+  --color-on-solid: #ffffff;
+
+  /* The bright band of the loading-skeleton shimmer. Its own token because "mix toward
+     white" is right on a light page and a harsh flash on a dark one. */
+  --color-skeleton-highlight: color-mix(in srgb, var(--color-border), white 60%);
+
+  /* Tells the browser which theme the page is in, so the things CSS doesn't paint itself
+     (scrollbars, native select/date popups, autofill) match it. */
+  color-scheme: light;
+
   /* ---- Typography ----
      One family, two weights, both specified explicitly -- resist the temptation to reach
      for a third weight "just this once" in a later step. */
@@ -81,4 +94,36 @@
      box getting identical treatment. */
   --radius-control: 6px;
   --border-width: 1px;
+}
+
+/* ---- Dark theme ----
+   Only the color tokens change; type, spacing and structure are shared with the light
+   theme. Applied by ThemeToggle / the inline script in index.html setting data-theme on
+   <html>. Not a simple inversion: the surface is LIGHTER than the page (the same "lift"
+   the light theme gets from white-on-gray), the accent and status colors are lighter
+   steps of the same hues so they keep contrast on a dark ground (text on the page reads
+   at roughly 7:1 or better), and solid fills carry dark text instead of white. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-text: #e6e8ee;
+  --color-bg: #0e1015;
+  --color-accent: #8b9cff;
+  --color-success: #4ade80;
+  --color-error: #f87171;
+  --color-pending: #fbbf24;
+
+  --color-surface: #161922;
+  --color-border: #2b2f3c;
+  --color-text-muted: #9ba1b3;
+  --color-disabled: #5a6072;
+
+  --color-accent-hover: #a9b6ff; /* lighter on hover: brighter is "more active" on dark */
+
+  --color-success-subtle: #10281a;
+  --color-error-subtle: #331616;
+  --color-pending-subtle: #33260c;
+
+  --color-on-solid: #0e1015;
+  --color-skeleton-highlight: color-mix(in srgb, var(--color-border), white 12%);
 }

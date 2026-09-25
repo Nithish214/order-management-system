@@ -10,7 +10,7 @@
   font-family: inherit;
   font-size: var(--text-base-size);
   font-weight: var(--font-weight-semibold);
-  color: #ffffff;
+  color: var(--color-on-solid);
   background: var(--color-accent);
   border: none;
   border-radius: var(--radius-control);
