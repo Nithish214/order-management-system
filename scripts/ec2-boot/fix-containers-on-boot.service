@@ -1,0 +1,21 @@
+[Unit]
+Description=Point DNS at this instance, wait for the app containers, and restart api-gateway to clear stale IPs
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Run via bash explicitly so the script does not depend on its executable bit surviving git
+# (a checkout from Windows does not reliably carry it).
+ExecStart=/bin/bash /home/ubuntu/order-management/scripts/ec2-boot/fix-containers-on-boot.sh
+RemainAfterExit=yes
+# DUCKDNS_TOKEN comes from here. systemd reads this file as root BEFORE dropping to User=, so it
+# can (and should) be root-only (chmod 600) -- the ubuntu user never needs to read it directly.
+EnvironmentFile=-/etc/order-management/duckdns.env
+# Runs as ubuntu, not root: the script calls sudo only for the one command that needs it (docker
+# compose restart), like every other command on this box.
+User=ubuntu
+
+[Install]
+WantedBy=multi-user.target
