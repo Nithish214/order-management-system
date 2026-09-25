@@ -113,6 +113,19 @@ public class SecurityConfig {
                         // GET, so nothing added under this prefix later is ever accidentally
                         // open to a regular shopper by falling through to the rule below.
                         .pathMatchers("/analytics/**").hasAuthority("ROLE_admin")
+                        // A user's OWN profile and address book -- /users/me and everything under
+                        // it. Any signed-in user, since each of those endpoints derives whose data
+                        // it is from the caller's own token (X-User-Sub), never from the URL.
+                        // Must come BEFORE the catch-all below: the first matching rule wins,
+                        // and "/users/**" would otherwise swallow these too.
+                        .pathMatchers("/users/me", "/users/me/**").authenticated()
+                        // Everything else under /users is the directory of ALL accounts
+                        // (GET /users, GET /users/{id}) -- names and emails of every customer.
+                        // Admin only. A catch-all rather than two exact paths on purpose: a new
+                        // endpoint added under /users later is admin-only by default and has to
+                        // be deliberately opened up (by living under /me), instead of being
+                        // exposed to every shopper by falling through to the rule below.
+                        .pathMatchers("/users", "/users/**").hasAuthority("ROLE_admin")
                         // Every other route just needs any validly-signed, unexpired token.
                         .anyExchange().authenticated()
                 )

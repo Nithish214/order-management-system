@@ -5,6 +5,7 @@ import com.learn.orderservice.dto.SyncProfileRequest;
 import com.learn.orderservice.dto.UpdateProfileRequest;
 import com.learn.orderservice.dto.UserResponse;
 import com.learn.orderservice.entity.AppUser;
+import com.learn.orderservice.exception.ForbiddenException;
 import com.learn.orderservice.repository.AppUserRepository;
 import com.learn.orderservice.service.UserAccountService;
 import jakarta.persistence.EntityNotFoundException;
@@ -16,8 +17,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Locale;
 
-// Read-only lookup so a client (Postman/Swagger, no frontend yet) can discover valid
-// userIds before calling POST /orders, without querying the database directly.
+// /users/me (below) is each signed-in user's own profile. GET /users and GET /users/{id} are
+// the directory of ALL accounts -- originally a read-only lookup so a client (Postman/Swagger,
+// no frontend yet) could discover valid userIds. Nothing uses them any more, and they expose
+// every customer's name and email, so both are admin-only: enforced at the Gateway
+// (SecurityConfig) AND re-checked here from X-User-Is-Admin, so one misconfigured rule in
+// either place isn't the only thing between a shopper and everyone else's details.
 @RestController
 @RequestMapping("/users")
 public class UserController {
@@ -31,7 +36,10 @@ public class UserController {
     }
 
     @GetMapping
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
+    public ResponseEntity<List<UserResponse>> getAllUsers(
+            @RequestHeader(value = "X-User-Is-Admin", defaultValue = "false") boolean isAdmin
+    ) {
+        requireAdmin(isAdmin);
         List<UserResponse> users = appUserRepository.findAll()
                 .stream()
                 .map(UserResponse::from)
@@ -40,7 +48,11 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
+    public ResponseEntity<UserResponse> getUser(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Is-Admin", defaultValue = "false") boolean isAdmin
+    ) {
+        requireAdmin(isAdmin);
         AppUser user = appUserRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found: " + id));
         return ResponseEntity.ok(UserResponse.from(user));
@@ -101,6 +113,14 @@ public class UserController {
         }
         AppUser saved = appUserRepository.save(user);
         return ResponseEntity.ok(UserResponse.from(saved));
+    }
+
+    // Defaults to false when the header is absent, so a request that somehow reached this service
+    // without going through the Gateway is treated as NOT an admin -- the safe side.
+    private void requireAdmin(boolean isAdmin) {
+        if (!isAdmin) {
+            throw new ForbiddenException("The user directory is only available to admins");
+        }
     }
 
     // No dedicated "name" field on the signup form (kept deliberately minimal, per the
