@@ -228,7 +228,9 @@ services:
       # Exact origin(s) the frontend is served from -- required now that /auth/login and
       # /auth/refresh use a credentialed (cookie-carrying) cross-site request; CORS
       # forbids "*" once allowCredentials(true) is in play. See SecurityConfig.
-      ALLOWED_ORIGINS: https://dgzc0rv8gh9y.cloudfront.net
+      # Comma-separated. The CloudFront address keeps working alongside the custom domain --
+      # both are the same storefront, so removing either would just break whoever still uses it.
+      ALLOWED_ORIGINS: https://dgzc0rv8gh9y.cloudfront.net,https://shop.nithishnarravula.dev
       JAVA_OPTS: "-Xmx90m"
     ports:
       - "8080:8080"
