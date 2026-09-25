@@ -26,6 +26,12 @@ pipeline {
         // whatever that IP currently is. SSH-ing to the hostname means this pipeline
         // never needs to look up or hardcode an IP that could be stale by the next run.
         GATEWAY_HOST = 'nithish-ordermgmt.duckdns.org'
+        // The API address the BROWSER uses (baked into the frontend bundle) -- a separate name
+        // from GATEWAY_HOST above on purpose. Both point at the same EC2 box, but this one is on
+        // the custom domain, so the storefront at shop.nithishnarravula.dev calls an API on the
+        // same registrable domain. GATEWAY_HOST stays for SSH/deploy; the duckdns name keeps
+        // working for the mobile monitor app.
+        FRONTEND_API_URL = 'https://shop-api.nithishnarravula.dev'
         FRONTEND_BUCKET = 'order-management-frontend-244689414185'
         CLOUDFRONT_DISTRIBUTION_ID = 'E1MH9X3BUX6CH5'
         // Not secrets -- see frontend/.env.example's own comment: the Cognito app
@@ -126,7 +132,7 @@ pipeline {
                     // to response.json(), is exactly "Unexpected token '<'".
                     sh '''
                         cat > .env << EOF
-VITE_GATEWAY_URL=https://${GATEWAY_HOST}
+VITE_GATEWAY_URL=${FRONTEND_API_URL}
 VITE_COGNITO_REGION=${VITE_COGNITO_REGION}
 VITE_COGNITO_CLIENT_ID=${VITE_COGNITO_CLIENT_ID}
 VITE_COGNITO_DOMAIN=${VITE_COGNITO_DOMAIN}
