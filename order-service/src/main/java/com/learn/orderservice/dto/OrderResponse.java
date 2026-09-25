@@ -20,6 +20,9 @@ public class OrderResponse {
     private LocalDateTime createdAt;
     // Only ever populated when status is REJECTED -- null for every other status.
     private String rejectionReason;
+    // The address as it was when this order was placed (a snapshot, not the user's live address
+    // book). Null only for orders placed before addresses existed -- never invented for them.
+    private ShippingAddressResponse shippingAddress;
     private List<OrderItemResponse> items;
 
     public static OrderResponse from(Order order) {
@@ -30,6 +33,9 @@ public class OrderResponse {
         response.setTotalAmount(order.getTotalAmount());
         response.setCreatedAt(order.getCreatedAt());
         response.setRejectionReason(order.getRejectionReason());
+        if (order.getShippingAddress() != null) {
+            response.setShippingAddress(ShippingAddressResponse.from(order.getShippingAddress()));
+        }
         response.setItems(order.getItems().stream().map(OrderItemResponse::from).toList());
         return response;
     }

@@ -72,3 +72,7 @@
 .skeleton-order-meta {
   width: 180px;
 }
+
+.history-row-ship {
+  overflow-wrap: anywhere;
+}

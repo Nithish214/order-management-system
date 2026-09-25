@@ -21,6 +21,13 @@ public class CreateOrderRequest {
     @Valid
     private List<OrderItemRequest> items;
 
+    // One of the CALLER's saved addresses -- required, since an order with nowhere to send it
+    // isn't a complete order. Only an id crosses the wire: the address's actual fields are read
+    // from the database and copied onto the order server-side (see OrderCreationService), never
+    // taken from the client, and an id that isn't the caller's own is rejected outright.
+    @NotNull(message = "addressId is required")
+    private Long addressId;
+
     @Getter
     @Setter
     public static class OrderItemRequest {

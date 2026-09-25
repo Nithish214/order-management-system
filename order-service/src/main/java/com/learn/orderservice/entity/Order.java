@@ -45,6 +45,13 @@ public class Order {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    // Where this order was actually sent, copied at placement time -- NOT a reference to the
+    // user's address book (see ShippingAddressSnapshot for why, and for the flattened-columns
+    // vs separate-table tradeoff). Null only for orders placed before addresses existed;
+    // every new order has one.
+    @Embedded
+    private ShippingAddressSnapshot shippingAddress;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
 }

@@ -32,6 +32,7 @@ public class OrderCreationService {
     private final OrderRepository orderRepository;
     private final AppUserRepository appUserRepository;
     private final ProductRepository productRepository;
+    private final ShippingAddressRepository shippingAddressRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -41,6 +42,7 @@ public class OrderCreationService {
             OrderRepository orderRepository,
             AppUserRepository appUserRepository,
             ProductRepository productRepository,
+            ShippingAddressRepository shippingAddressRepository,
             OutboxEventRepository outboxEventRepository,
             IdempotencyKeyRepository idempotencyKeyRepository,
             ApplicationEventPublisher applicationEventPublisher,
@@ -49,6 +51,7 @@ public class OrderCreationService {
         this.orderRepository = orderRepository;
         this.appUserRepository = appUserRepository;
         this.productRepository = productRepository;
+        this.shippingAddressRepository = shippingAddressRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.idempotencyKeyRepository = idempotencyKeyRepository;
         this.applicationEventPublisher = applicationEventPublisher;
@@ -63,6 +66,17 @@ public class OrderCreationService {
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Order must contain at least one item");
         }
+
+        // Looked up by id AND owner in one query -- an address that exists but belongs to someone
+        // else is indistinguishable from one that does not exist, so this can never silently ship
+        // to a stranger's address, and cannot be used to probe which ids exist. Checked before
+        // any item work so a bad address fails fast, as a plain 404 with a clear message, and
+        // nothing is written. A brand-new account (just created above) has no addresses at all,
+        // so it correctly fails here too.
+        ShippingAddress shippingAddress = shippingAddressRepository
+                .findByIdAndUserId(request.getAddressId(), user.getId())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Shipping address not found -- choose one of your saved addresses"));
 
         List<OrderItem> orderItems = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
@@ -90,6 +104,9 @@ public class OrderCreationService {
         order.setUser(user);
         order.setTotalAmount(totalAmount);
         order.setStatus(OrderStatus.PENDING);
+        // COPIED onto the order, not linked: same principle as unitPrice above. Edit or delete
+        // this saved address tomorrow and this order still records where it was really sent.
+        order.setShippingAddress(shippingAddress.toSnapshot());
 
         for (OrderItem orderItem : orderItems) {
             orderItem.setOrder(order);

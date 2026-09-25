@@ -1,0 +1,82 @@
+/* Same "list with hairline dividers, no card chrome" language as the order history and product
+   lists -- an address is a row in a list, not a boxed widget. */
+
+.address-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.address-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.address-list .address-card:first-child {
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+/* The inline "new address" form: sits below the list with a divider above it. */
+.address-card--new {
+  border-bottom: none;
+}
+
+.address-card--new h3 {
+  margin: 0;
+  font-size: var(--text-base-size);
+  line-height: var(--text-base-line);
+}
+
+.address-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.address-card-label {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Not a status color -- "default" isn't good/bad/pending, just a marker. Outlined and muted. */
+.address-badge {
+  padding: 0 var(--space-2);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs-size);
+  line-height: var(--text-xs-line);
+}
+
+.address-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.address-confirm {
+  margin-top: var(--space-1);
+}
+
+.address-confirm p {
+  margin: 0 0 var(--space-2);
+}
+
+.address-add {
+  margin-top: var(--space-3);
+}
+
+.address-empty {
+  margin: 0 0 var(--space-3);
+}
+
+.skeleton-address-title {
+  width: 80px;
+}
+
+.skeleton-address-line {
+  width: 220px;
+}

@@ -22,6 +22,7 @@ export default function AppHeader() {
       <nav className="app-header-nav">
         <Link to="/">Products</Link>
         <Link to="/orders">Order history</Link>
+        <Link to="/profile">Profile</Link>
         <Link to="/cart" className="app-header-cart-link">
           <CartIcon size={18} />
           Cart

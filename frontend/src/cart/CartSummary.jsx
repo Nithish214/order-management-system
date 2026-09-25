@@ -4,6 +4,7 @@ import { useApiFetch } from "../api/useApiFetch";
 import { useAuth } from "../auth/AuthContext";
 import { useCart } from "./CartContext";
 import { useCurrency } from "../currency/CurrencyContext";
+import CheckoutAddress from "../components/CheckoutAddress";
 import Spinner from "../components/Spinner";
 import { friendlyErrorMessage } from "../utils/errors";
 import "./CartSummary.css";
@@ -22,9 +23,16 @@ export default function CartSummary() {
   const { currencyCode, formatPrice } = useCurrency();
   const [placingOrder, setPlacingOrder] = useState(false);
   const [error, setError] = useState(null);
+  // Which saved address this order ships to. Owned here (not inside CheckoutAddress) because it
+  // is part of the order itself: it's sent with it, and "Place order" stays disabled until one
+  // is chosen. null until CheckoutAddress reports its default.
+  const [addressId, setAddressId] = useState(null);
+  // Bumped to make CheckoutAddress re-read the list, e.g. after the server rejects a stale id.
+  const [addressReload, setAddressReload] = useState(0);
 
-  // Regenerated only when the cart's actual contents change (an item added/removed, a
-  // quantity edited) -- deliberately NOT regenerated on every render and NOT on every click
+  // Regenerated only when the order's actual contents change (an item added/removed, a
+  // quantity edited, a DIFFERENT SHIPPING ADDRESS picked) -- deliberately NOT regenerated on
+  // every render and NOT on every click
   // of "Place order". That's what makes this correct on both sides of the tradeoff: a
   // network-failure retry of the exact same cart (the user just clicks the button again, or
   // apiFetch itself silently retries once after a 401) reuses this same key, so Order
@@ -34,7 +42,12 @@ export default function CartSummary() {
   // A plain content comparison, not a reference one -- useMemo's own dependency comparison
   // is by reference, and a new items array reference gets created on every cart edit
   // regardless of whether the contents actually differ.
-  const cartContentsKey = JSON.stringify(cart.items);
+  //
+  // The address is part of "what this order is": if someone places an order, then switches to
+  // another address and tries again with the SAME key, Order Service would recognize the key
+  // and replay the first order -- shipping to the address they just changed away from. A new
+  // address must mean a new key, exactly like a new quantity does.
+  const cartContentsKey = JSON.stringify({ items: cart.items, addressId });
   // The memoized value (a random UUID) never reads cartContentsKey -- it's purely a
   // change-trigger to force a fresh UUID exactly when the cart's contents change, same idea
   // as this app's key={status} remount trick elsewhere (StatusBadge), just via useMemo
@@ -44,6 +57,7 @@ export default function CartSummary() {
   const idempotencyKey = useMemo(() => crypto.randomUUID(), [cartContentsKey]);
 
   async function handlePlaceOrder() {
+    if (addressId === null) return;
     setPlacingOrder(true);
     setError(null);
     try {
@@ -58,6 +72,10 @@ export default function CartSummary() {
             productId: item.productId,
             quantity: item.quantity,
           })),
+          // Only the id: the server looks the address up (it must be one of THIS user's) and
+          // copies its fields onto the order itself, so what gets shipped to is never
+          // something the browser can supply or alter.
+          addressId,
         }),
       });
 
@@ -73,6 +91,11 @@ export default function CartSummary() {
           throw new Error("Too many orders are being placed right now. Please wait a moment and try again.");
         }
         const body = await response.json();
+        // The chosen address is gone or isn't ours (deleted in another tab, say): re-read the
+        // list, so the picker drops the stale one and falls back to a real address.
+        if (response.status === 404 && /address/i.test(body.message ?? "")) {
+          setAddressReload((count) => count + 1);
+        }
         throw new Error(body.message || "Failed to place order");
       }
 
@@ -166,10 +189,17 @@ export default function CartSummary() {
           {isAdmin ? (
             <p className="text-muted">Admin accounts can't place orders.</p>
           ) : (
-            <button className="btn-primary" onClick={handlePlaceOrder} disabled={placingOrder}>
-              {placingOrder && <Spinner size={14} />}
-              {placingOrder ? "Placing order..." : "Place order"}
-            </button>
+            <>
+              <CheckoutAddress value={addressId} onChange={setAddressId} reloadToken={addressReload} />
+              <button
+                className="btn-primary"
+                onClick={handlePlaceOrder}
+                disabled={placingOrder || addressId === null}
+              >
+                {placingOrder && <Spinner size={14} />}
+                {placingOrder ? "Placing order..." : "Place order"}
+              </button>
+            </>
           )}
         </>
       )}

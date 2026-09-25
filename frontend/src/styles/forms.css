@@ -1,0 +1,88 @@
+/* Shared form-field treatment for the profile and address forms -- the same look as the
+   login/signup fields (see AuthForm.css's .auth-field), made available outside the auth
+   pages rather than those pages' stylesheet being quietly relied on from elsewhere. Same
+   tokens, no new sizes/colors/radii. */
+
+.form-field {
+  margin-bottom: var(--space-3);
+}
+
+.form-field label {
+  display: block;
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-1);
+}
+
+.form-field .form-optional {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+}
+
+.form-field input[type="text"],
+.form-field input[type="tel"],
+.form-field input[type="email"] {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-base-size);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.form-field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.form-field input:disabled {
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+}
+
+/* Doubled class so this out-ranks the base `.form-field input[type=...]` rule above it -- a
+   single .form-field--invalid has lower specificity than an attribute selector and would
+   silently never apply. */
+.form-field.form-field--invalid input {
+  border-color: var(--color-error);
+}
+
+.form-field-error {
+  margin: var(--space-1) 0 0;
+}
+
+.form-hint {
+  margin: var(--space-1) 0 0;
+}
+
+/* Two fields side by side (city / state, postal code / country), stacking on a narrow screen. */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  column-gap: var(--space-3);
+}
+
+@media (min-width: 520px) {
+  .form-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

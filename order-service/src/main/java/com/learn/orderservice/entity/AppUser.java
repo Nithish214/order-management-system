@@ -32,6 +32,10 @@ public class AppUser {
     @Column(name = "cognito_sub", unique = true)
     private String cognitoSub;
 
+    // Null until the user adds one on their profile page -- optional everywhere.
+    @Column(name = "phone_number", length = 20)
+    private String phoneNumber;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Order> orders = new ArrayList<>();
 }

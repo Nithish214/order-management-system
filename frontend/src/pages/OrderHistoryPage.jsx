@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
+import { formatAddressOneLine } from "../utils/address";
 import StatusBadge from "../components/StatusBadge";
 import AppHeader from "../components/AppHeader";
 import ErrorState from "../components/ErrorState";
@@ -138,6 +139,13 @@ export default function OrderHistoryPage() {
                   <span>{formatPrice(order.totalAmount)}</span>
                   <span>{new Date(order.createdAt).toLocaleString()}</span>
                 </div>
+                {/* The snapshot stored on the order, so it stays accurate however the saved
+                    address changes later. Absent for orders from before addresses existed. */}
+                {order.shippingAddress && (
+                  <div className="history-row-ship text-muted">
+                    Ships to {formatAddressOneLine(order.shippingAddress)}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

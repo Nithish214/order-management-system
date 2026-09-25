@@ -11,6 +11,7 @@ import OrderStatusPage from "./pages/OrderStatusPage";
 import OrderHistoryPage from "./pages/OrderHistoryPage";
 import CartPage from "./pages/CartPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+import ProfilePage from "./pages/ProfilePage";
 import NotFoundPage from "./pages/NotFoundPage";
 
 // The "protected route" pattern: a wrapper that checks auth state and either renders
@@ -87,6 +88,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <OrderHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />

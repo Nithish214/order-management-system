@@ -410,3 +410,15 @@
   margin-bottom: var(--space-5);
   font-weight: var(--font-weight-semibold);
 }
+
+/* The shipping address block under the order total. Same quiet section treatment as the
+   rest of this page -- a heading and the lines, no box. */
+.order-shipping {
+  margin-bottom: var(--space-5);
+}
+
+.order-shipping h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base-size);
+  line-height: var(--text-base-line);
+}

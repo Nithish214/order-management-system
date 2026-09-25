@@ -4,6 +4,7 @@ import { useApiFetch } from "../api/useApiFetch";
 import { useCurrency } from "../currency/CurrencyContext";
 import { friendlyErrorMessage } from "../utils/errors";
 import AppHeader from "../components/AppHeader";
+import AddressLines from "../components/AddressLines";
 import Spinner from "../components/Spinner";
 import ErrorState from "../components/ErrorState";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -223,6 +224,19 @@ export default function OrderStatusPage() {
         {currencyCode !== "USD" && (
           <p className="text-muted">Estimated in {currencyCode} -- charged in USD.</p>
         )}
+
+        {/* Read from the order itself (a copy taken when it was placed), NOT from the user's
+            address book -- so this stays exactly where the order actually went even if that
+            saved address is later edited or deleted. Orders placed before addresses existed
+            simply have none; say so rather than leave an unexplained gap. */}
+        <section className="order-shipping">
+          <h2>Shipping to</h2>
+          {order.shippingAddress ? (
+            <AddressLines address={order.shippingAddress} />
+          ) : (
+            <p className="text-muted">No shipping address was recorded for this order.</p>
+          )}
+        </section>
       </div>
     </>
   );

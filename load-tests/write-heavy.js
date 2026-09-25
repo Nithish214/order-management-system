@@ -23,7 +23,11 @@
 //      very easy to mistake for "the system broke" if you don't already know why.
 //
 // Run with:
-//   k6 run -e GATEWAY_URL=http://<ec2-ip>:8080 -e ACCESS_TOKEN=<token> load-tests/write-heavy.js
+//   k6 run -e GATEWAY_URL=http://<ec2-ip>:8080 -e ACCESS_TOKEN=<token> -e ADDRESS_ID=<id> load-tests/write-heavy.js
+//
+// ADDRESS_ID is required: POST /orders now needs one of the caller's own saved addresses (see
+// AddressController -- create one for the test user first, then pass its id). Every order in the
+// run ships to that one address; it's a load test, not a realism test of address variety.
 
 import http from "k6/http";
 import { check, sleep } from "k6";
@@ -58,6 +62,7 @@ export const options = {
 
 const GATEWAY = __ENV.GATEWAY_URL;
 const TOKEN = __ENV.ACCESS_TOKEN;
+const ADDRESS_ID = Number(__ENV.ADDRESS_ID);
 
 // Small, cheap catalog spread across different rows -- like real shoppers buying different
 // things, not everyone fighting over the exact same product_stock row. Concentrating every
@@ -83,7 +88,7 @@ export default function () {
 
   const res = http.post(
     `${GATEWAY}/orders`,
-    JSON.stringify({ items: [{ productId, quantity: 1 }] }),
+    JSON.stringify({ items: [{ productId, quantity: 1 }], addressId: ADDRESS_ID }),
     {
       headers: {
         Authorization: `Bearer ${TOKEN}`,

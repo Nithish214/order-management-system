@@ -1,0 +1,8 @@
+.address-lines {
+  display: flex;
+  flex-direction: column;
+  font-style: normal;
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+  color: var(--color-text);
+}
