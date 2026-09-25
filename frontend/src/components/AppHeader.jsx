@@ -27,6 +27,7 @@ export default function AppHeader() {
           Cart
           {itemCount > 0 && <span className="app-header-cart-badge">{itemCount}</span>}
         </Link>
+        {isAdmin && <Link to="/admin">Dashboard</Link>}
         {isAdmin && <span className="app-header-admin-badge">Admin</span>}
         <button onClick={logout} className="btn-secondary">
           Log out

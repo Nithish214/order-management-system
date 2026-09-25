@@ -68,6 +68,18 @@ spring:
                 name: order-service-cb
                 fallbackUri: forward:/fallback/order-service
 
+        # Admin dashboard aggregates (AnalyticsController) -- admin-only, enforced by the
+        # matching rule in SecurityConfig, not by anything on this route itself.
+        - id: order-service-analytics
+          uri: ${order.service.url:http://localhost:8081}
+          predicates:
+            - Path=/analytics/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: order-service-cb
+                fallbackUri: forward:/fallback/order-service
+
         - id: inventory-service-stock-read
           uri: ${inventory.service.url:http://localhost:8082}
           predicates:

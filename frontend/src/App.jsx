@@ -10,6 +10,7 @@ import ProductDetailPage from "./pages/ProductDetailPage";
 import OrderStatusPage from "./pages/OrderStatusPage";
 import OrderHistoryPage from "./pages/OrderHistoryPage";
 import CartPage from "./pages/CartPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 import NotFoundPage from "./pages/NotFoundPage";
 
 // The "protected route" pattern: a wrapper that checks auth state and either renders
@@ -31,6 +32,22 @@ function ProtectedRoute({ children }) {
   }
 
   return isAuthenticated ? children : <Navigate to="/login" replace />;
+}
+
+// ProtectedRoute plus an admin check. A non-admin who lands here (a bookmarked or typed
+// /admin URL) goes to the storefront rather than a dead-end page. This is only the UI half:
+// the Gateway independently rejects /analytics/** for non-admins, so hiding this page never
+// stands in for actually protecting the data behind it.
+function AdminRoute({ children }) {
+  const { isAuthenticated, isBootstrapping, isAdmin } = useAuth();
+
+  if (isBootstrapping) {
+    return null;
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  return isAdmin ? children : <Navigate to="/" replace />;
 }
 
 // <Routes> looks at the current URL and renders whichever single <Route> matches it --
@@ -79,6 +96,14 @@ function AppRoutes() {
           <ProtectedRoute>
             <CartPage />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminDashboardPage />
+          </AdminRoute>
         }
       />
       {/* Deliberately NOT wrapped in ProtectedRoute -- an unmatched URL should show a

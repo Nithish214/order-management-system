@@ -109,6 +109,10 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/products/*/video-upload-url").hasAuthority("ROLE_admin")
                         .pathMatchers(HttpMethod.PUT, "/products/*/video").hasAuthority("ROLE_admin")
                         .pathMatchers(HttpMethod.DELETE, "/products/*/video").hasAuthority("ROLE_admin")
+                        // Sales/order aggregates for the admin dashboard -- every method, not just
+                        // GET, so nothing added under this prefix later is ever accidentally
+                        // open to a regular shopper by falling through to the rule below.
+                        .pathMatchers("/analytics/**").hasAuthority("ROLE_admin")
                         // Every other route just needs any validly-signed, unexpired token.
                         .anyExchange().authenticated()
                 )

@@ -72,7 +72,39 @@ export function CurrencyProvider({ children }) {
       }
     }
 
-    return { currencyCode, formatPrice };
+    // The three below exist for charts. A chart has to do its axis math (rounding the top
+    // to 1K / 2K / 5K...) in the currency the reader actually SEES -- rounding in USD and
+    // converting afterwards puts gridlines at things like "€1.8K / €3.5K" in EUR. So:
+    // convertPrice turns a USD figure into display-currency units, and the two formatters
+    // take an amount that is ALREADY in those units (no second conversion).
+    function convertPrice(usdAmount) {
+      return usdAmount * rate;
+    }
+
+    function formatAmount(amount) {
+      try {
+        return new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode }).format(amount);
+      } catch {
+        return amount.toFixed(2);
+      }
+    }
+
+    // Short form for axis ticks ("₹1.2K", not "₹1,200.00") -- a full price doesn't fit in a
+    // y-axis gutter.
+    function formatCompactAmount(amount) {
+      try {
+        return new Intl.NumberFormat(undefined, {
+          style: "currency",
+          currency: currencyCode,
+          notation: "compact",
+          maximumFractionDigits: 1,
+        }).format(amount);
+      } catch {
+        return String(Math.round(amount));
+      }
+    }
+
+    return { currencyCode, formatPrice, convertPrice, formatAmount, formatCompactAmount };
   }, [currencyCode, rate]);
 
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
