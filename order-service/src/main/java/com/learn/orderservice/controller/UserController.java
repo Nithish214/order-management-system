@@ -101,8 +101,9 @@ public class UserController {
             @Valid @RequestBody SyncProfileRequest request,
             @RequestHeader("X-User-Sub") String cognitoSub
     ) {
-        AppUser user = appUserRepository.findByCognitoSub(cognitoSub).orElseGet(AppUser::new);
-        user.setCognitoSub(cognitoSub);
+        // findOrCreate (not "look up, else new AppUser()"): on a brand-new user's first login
+        // this sync races the cart load, and both used to try to insert the same row.
+        AppUser user = userAccountService.findOrCreate(cognitoSub);
         user.setEmail(request.getEmail());
         // Re-derive whenever it's missing OR still the generic placeholder -- checking only
         // for null would never fire for anyone auto-created by createOrder before this

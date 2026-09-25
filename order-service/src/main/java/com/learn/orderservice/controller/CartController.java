@@ -138,12 +138,6 @@ public class CartController {
     // fire-and-forget POST /users/me (see AuthContext's login()) has finished syncing the
     // real profile. Placeholder email/name get overwritten by that sync whenever it lands.
     private AppUser findOrCreateUser(String cognitoSub) {
-        return appUserRepository.findByCognitoSub(cognitoSub).orElseGet(() -> {
-            AppUser user = new AppUser();
-            user.setCognitoSub(cognitoSub);
-            user.setEmail(cognitoSub + "@cognito.local");
-            user.setName("Cognito User");
-            return appUserRepository.save(user);
-        });
+        return appUserRepository.findOrCreate(cognitoSub);
     }
 }

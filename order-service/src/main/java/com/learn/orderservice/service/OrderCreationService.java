@@ -60,8 +60,7 @@ public class OrderCreationService {
 
     @Transactional
     public OrderCreationResult attemptCreateOrder(CreateOrderRequest request, String cognitoSub, String idempotencyKey) {
-        AppUser user = appUserRepository.findByCognitoSub(cognitoSub)
-                .orElseGet(() -> createUserForCognitoSub(cognitoSub));
+        AppUser user = appUserRepository.findOrCreate(cognitoSub);
 
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Order must contain at least one item");
@@ -155,19 +154,6 @@ public class OrderCreationService {
         applicationEventPublisher.publishEvent(new OutboxEventCreated(outboxEvent.getId()));
 
         return new OrderCreationResult(status, responseBody);
-    }
-
-    // The first order ever placed by a given Cognito identity creates its app_user row on
-    // the spot -- there's no separate signup step yet. email/name are placeholders: the
-    // access token's "sub" claim carries no profile info (name, real email) at all, only
-    // the ID token does, and we deliberately don't send that to APIs (see Phase 4 notes).
-    // A real signup flow would populate these properly instead of synthesizing them.
-    private AppUser createUserForCognitoSub(String cognitoSub) {
-        AppUser user = new AppUser();
-        user.setCognitoSub(cognitoSub);
-        user.setEmail(cognitoSub + "@cognito.local");
-        user.setName("Cognito User");
-        return appUserRepository.save(user);
     }
 
     private String serialize(OrderResponse response) {

@@ -19,12 +19,6 @@ public class UserAccountService {
     }
 
     public AppUser findOrCreate(String cognitoSub) {
-        return appUserRepository.findByCognitoSub(cognitoSub).orElseGet(() -> {
-            AppUser user = new AppUser();
-            user.setCognitoSub(cognitoSub);
-            user.setEmail(cognitoSub + "@cognito.local");
-            user.setName("Cognito User");
-            return appUserRepository.save(user);
-        });
+        return appUserRepository.findOrCreate(cognitoSub);
     }
 }
