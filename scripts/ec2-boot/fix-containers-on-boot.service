@@ -10,9 +10,12 @@ Type=oneshot
 # (a checkout from Windows does not reliably carry it).
 ExecStart=/bin/bash /home/ubuntu/order-management/scripts/ec2-boot/fix-containers-on-boot.sh
 RemainAfterExit=yes
-# DUCKDNS_TOKEN comes from here. systemd reads this file as root BEFORE dropping to User=, so it
-# can (and should) be root-only (chmod 600) -- the ubuntu user never needs to read it directly.
+# DUCKDNS_TOKEN and PORKBUN_API_KEY/PORKBUN_API_SECRET come from here. systemd reads these files
+# as root BEFORE dropping to User=, so they can (and should) be root-only (chmod 600) -- the
+# ubuntu user never needs to read either directly. The leading "-" means a missing file is not a
+# fatal error (it was true for duckdns.env before this one existed at all).
 EnvironmentFile=-/etc/order-management/duckdns.env
+EnvironmentFile=-/etc/order-management/porkbun.env
 # Runs as ubuntu, not root: the script calls sudo only for the one command that needs it (docker
 # compose restart), like every other command on this box.
 User=ubuntu
