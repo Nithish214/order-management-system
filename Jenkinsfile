@@ -59,11 +59,21 @@ pipeline {
         // job's very first run, or after Jenkins loses that history -- treated as "build
         // and deploy everything," the safe default when there's no prior state to diff
         // against.
+        //
+        // Also true whenever THIS file changed: a Jenkinsfile edit can change what a stage
+        // does (an env var like FRONTEND_API_URL below, a build arg, a flag) without
+        // touching that stage's own folder at all, and a per-folder diff has no way to
+        // notice that. Found the hard way -- changing FRONTEND_API_URL here, with no
+        // frontend/ file touched, meant three straight builds logged "Frontend: lint +
+        // build" as SKIPPED and still finished SUCCESS, silently deploying nothing new.
+        // Skipping isn't a failure, so nothing here even looked wrong.
         stage('Detect changed services') {
             steps {
                 script {
                     def baseCommit = env.GIT_PREVIOUS_SUCCESSFUL_COMMIT
-                    def buildAll = (baseCommit == null)
+                    def jenkinsfileChanged = baseCommit != null &&
+                        sh(script: "git diff --name-only ${baseCommit} HEAD -- Jenkinsfile", returnStdout: true).trim() != ''
+                    def buildAll = (baseCommit == null) || jenkinsfileChanged
                     def changed = buildAll ? '' : sh(script: "git diff --name-only ${baseCommit} HEAD", returnStdout: true).trim()
 
                     env.BUILD_ORDER = (buildAll || changed.contains('order-service/')) ? 'true' : 'false'
