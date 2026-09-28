@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useCart } from "../cart/CartContext";
+import { useWishlist } from "../wishlist/WishlistContext";
 import Logo from "./Logo";
-import { CartIcon } from "./icons";
+import { CartIcon, HeartIcon } from "./icons";
 import ThemeToggle from "./ThemeToggle";
 import "./AppHeader.css";
 
@@ -13,6 +14,7 @@ import "./AppHeader.css";
 export default function AppHeader() {
   const { logout, isAdmin } = useAuth();
   const cart = useCart();
+  const wishlist = useWishlist();
   const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
@@ -24,10 +26,17 @@ export default function AppHeader() {
         <Link to="/">Products</Link>
         <Link to="/orders">Order history</Link>
         <Link to="/profile">Profile</Link>
-        <Link to="/cart" className="app-header-cart-link">
+        <Link to="/wishlist" className="app-header-icon-link">
+          <HeartIcon size={18} filled={wishlist.items.length > 0} />
+          Saved
+          {wishlist.items.length > 0 && (
+            <span className="app-header-count-badge">{wishlist.items.length}</span>
+          )}
+        </Link>
+        <Link to="/cart" className="app-header-icon-link">
           <CartIcon size={18} />
           Cart
-          {itemCount > 0 && <span className="app-header-cart-badge">{itemCount}</span>}
+          {itemCount > 0 && <span className="app-header-count-badge">{itemCount}</span>}
         </Link>
         {isAdmin && <Link to="/admin">Dashboard</Link>}
         {isAdmin && <span className="app-header-admin-badge">Admin</span>}

@@ -5,6 +5,7 @@ import { addProductImage, deleteProductImage } from "../api/productImages";
 import { setProductVideo, deleteProductVideo } from "../api/productVideos";
 import { getReviews, getReviewEligibility, createReview } from "../api/reviews";
 import { useCart } from "../cart/CartContext";
+import WishlistToggle from "../wishlist/WishlistToggle";
 import { useCurrency } from "../currency/CurrencyContext";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../toast/ToastContext";
@@ -516,6 +517,7 @@ export default function ProductDetailPage() {
             <button className="btn-primary" onClick={handleAddToCart}>
               Add to cart
             </button>
+            <WishlistToggle product={product} />
           </div>
 
           {added && (

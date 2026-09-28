@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { CartProvider } from "./cart/CartContext";
+import { WishlistProvider } from "./wishlist/WishlistContext";
 import { CurrencyProvider } from "./currency/CurrencyContext";
 import { ToastProvider } from "./toast/ToastContext";
 import LoginPage from "./pages/LoginPage";
@@ -10,6 +11,7 @@ import ProductDetailPage from "./pages/ProductDetailPage";
 import OrderStatusPage from "./pages/OrderStatusPage";
 import OrderHistoryPage from "./pages/OrderHistoryPage";
 import CartPage from "./pages/CartPage";
+import WishlistPage from "./pages/WishlistPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -108,6 +110,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/wishlist"
+        element={
+          <ProtectedRoute>
+            <WishlistPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin"
         element={
           <AdminRoute>
@@ -135,7 +145,13 @@ export default function App() {
               remember to trigger one itself. */}
           <ToastProvider>
             <CartProvider>
-              <AppRoutes />
+              {/* Independent of CartProvider (its own server-side list, its own
+                  endpoints) -- nested alongside it rather than inside/outside it in any
+                  meaningful order, just below ToastProvider for the same "calls
+                  useToast() directly" reason CartProvider is. */}
+              <WishlistProvider>
+                <AppRoutes />
+              </WishlistProvider>
             </CartProvider>
           </ToastProvider>
         </CurrencyProvider>

@@ -216,6 +216,9 @@
 }
 
 .product-card {
+  /* Relative so .product-card-wishlist (position: absolute) sits over this card's own
+     thumb, not the page. */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);

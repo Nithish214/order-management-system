@@ -1,0 +1,47 @@
+/* Same 32px icon-button shape as .theme-toggle, just circular -- this one sits on top of
+   a product photo (see .product-card-wishlist) as often as it sits plainly in a row of
+   controls, and a circle reads as "a badge over an image" better than a square does. */
+.wishlist-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: 999px;
+}
+
+.wishlist-toggle:hover {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+/* Saved: filled heart in the one color this app reserves for "REJECTED / errors"
+   elsewhere (StatusBadge, OrderStatusPage) -- borrowed here for its everyday web meaning
+   (a filled red heart = saved) rather than treated as a status judgment. Never the sole
+   signal either way: the icon itself changes shape (outline vs filled, see HeartIcon),
+   and the accessible name/aria-pressed both say "saved" or "save" in words. */
+.wishlist-toggle--saved {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+/* Sits on top of a product photo (.product-card-thumb, .detail-image) rather than
+   inline with the rest of the card's controls -- the one place this app breaks from
+   "borders over shadows" (tokens.css's own rule): a plain border reads poorly against a
+   photo of unpredictable color, where a shadow behind the surface fill stays visible on
+   any background. */
+.product-card-wishlist {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+}
+
+.product-card-wishlist .wishlist-toggle {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}

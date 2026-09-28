@@ -10,6 +10,7 @@ import { friendlyErrorMessage } from "../utils/errors";
 import StockCount from "../components/StockCount";
 import AppHeader from "../components/AppHeader";
 import Skeleton from "../components/Skeleton";
+import WishlistToggle from "../wishlist/WishlistToggle";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./ProductsPage.css";
 
@@ -547,6 +548,13 @@ export default function ProductsPage() {
               <div className="product-grid">
                 {visibleProducts.map((product) => (
                   <div className="product-card" key={product.id}>
+                    {/* A sibling of the Link below, not nested inside it -- a <button>
+                        inside an <a> is invalid HTML and would also fire both the toggle
+                        and the navigation on one click. Positioned on top of the thumb
+                        purely with CSS (see .product-card-wishlist). */}
+                    <div className="product-card-wishlist">
+                      <WishlistToggle product={product} />
+                    </div>
                     <Link to={`/products/${product.id}`} className="product-card-link">
                       <div className="product-card-thumb">
                         {product.images.length > 0 ? (
