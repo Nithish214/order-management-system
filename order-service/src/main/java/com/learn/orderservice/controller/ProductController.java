@@ -36,8 +36,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 // Read-only lookup so a client (Postman/Swagger, no frontend yet) can discover valid
@@ -94,9 +96,9 @@ public class ProductController {
     // revisiting this at. See PagedResponse for the response shape this returns now
     // instead of a plain array.
     //
-    // Optional ?sort= picks how results are ordered -- "featured" (the default) is the
-    // same stable id-ascending order pagination already needed for correctness (see
-    // buildPageable/resolveSort below); everything else is the common e-commerce set
+    // Optional ?sort= picks how results are ordered -- "featured" (the default) is a
+    // shuffle that changes once a day, still stable enough for correct pagination within
+    // that day (see findProductsPage below); everything else is the common e-commerce set
     // given the data this catalog actually has (price, id as a proxy for "when it was
     // added", name) -- no ratings/sales data exists to support something like "Best
     // Sellers".
@@ -118,10 +120,7 @@ public class ProductController {
             // this service, where no gateway ever sets it at all.
             @RequestHeader(value = "X-User-Is-Admin", defaultValue = "false") boolean isAdmin
     ) {
-        Pageable pageable = buildPageable(page, size, sort);
-        Page<Product> results = (category == null || category.isBlank())
-                ? productRepository.findAll(pageable)
-                : productRepository.findByCategory(category, pageable);
+        Page<Product> results = findProductsPage(category, page, size, sort);
         return ResponseEntity.ok(PagedResponse.from(results.map(product -> ProductResponse.from(product, isAdmin))));
     }
 
@@ -132,22 +131,25 @@ public class ProductController {
         return Math.max(1, Math.min(size, MAX_PAGE_SIZE));
     }
 
-    // Whitelist mapping from the ?sort= string to an actual Sort -- never builds one
-    // from raw client input directly (that would let a caller sort/inject on arbitrary
-    // column names), and falls back to the same "featured" order for anything it doesn't
-    // recognize rather than erroring, so an old bookmarked URL or a typo just gets the
-    // default instead of a 400.
-    //
-    // id ascending IS "featured" here: this catalog has no actual merchandising/curation
-    // concept (no "featured" flag on Product), so insertion order is what stands in for
-    // it -- same default LIMIT/OFFSET pagination already needed anyway for the reason
-    // explained below.
+    // The four sorts a caller can actually ask for by name -- "featured" (the default,
+    // and also what anything unrecognized falls back to -- see findProductsPage) is
+    // handled entirely separately, since it isn't a plain column ORDER BY at all
+    // anymore. Kept as an explicit whitelist here rather than building a Sort from raw
+    // client input directly, which would let a caller sort/inject on arbitrary column
+    // names.
+    private static final Set<String> NAMED_SORTS = Set.of("price_asc", "price_desc", "newest", "name_asc");
+
     private static Sort resolveSort(String sort) {
         return switch (sort) {
             case "price_asc" -> Sort.by("unitPrice").ascending();
             case "price_desc" -> Sort.by("unitPrice").descending();
             case "newest" -> Sort.by("id").descending();
             case "name_asc" -> Sort.by("name").ascending();
+            // Never actually reached: every caller of this method (see
+            // findProductsPage) only calls it for one of the four cases above, having
+            // already routed "featured" and anything unrecognized to the shuffled query
+            // instead. Kept as a safe, whitelisted fallback rather than throwing, in
+            // case that ever changes.
             default -> Sort.by("id").ascending();
         };
     }
@@ -169,6 +171,36 @@ public class ProductController {
     // safely apply once a keyword match is in play.
     private static Pageable buildPageable(int page, int size, String sort) {
         return PageRequest.of(page, clampPageSize(size), resolveSort(sort));
+    }
+
+    // The listing every plain GET /products and the blank-q fallback of GET
+    // /products/search both need -- category-optional, "featured" or one of the four
+    // named sorts.
+    //
+    // "Featured" used to just be id-ascending, which meant every visitor's first page
+    // was identical, forever -- the same oldest rows in the catalog, every single visit,
+    // no matter how many times you came back. Now it's a shuffle that changes once a
+    // day (see ProductRepository#findAllShuffledDaily): today's date, as a plain string,
+    // is the seed that query hashes each row's id against, so the order is different
+    // from yesterday's but identical across every request made today -- reloading, going
+    // to page 2, switching a filter and switching it back all still agree on where each
+    // product sits, the same stability plain id-ascending gave for free. A category
+    // filter reshuffles independently of the unfiltered list (its own WHERE clause, same
+    // daySeed), not a subsequence of it -- there's no requirement that they agree with
+    // each other, only that each stays internally consistent for the rest of the day.
+    private Page<Product> findProductsPage(String category, int page, int size, String sort) {
+        boolean hasCategory = category != null && !category.isBlank();
+        if (NAMED_SORTS.contains(sort)) {
+            Pageable pageable = buildPageable(page, size, sort);
+            return hasCategory
+                    ? productRepository.findByCategory(category, pageable)
+                    : productRepository.findAll(pageable);
+        }
+        String daySeed = LocalDate.now().toString();
+        Pageable pageable = PageRequest.of(page, clampPageSize(size));
+        return hasCategory
+                ? productRepository.findByCategoryShuffledDaily(category, daySeed, pageable)
+                : productRepository.findAllShuffledDaily(daySeed, pageable);
     }
 
     // Backs the sidebar/nav -- one row per category, with how many products are actually
@@ -217,7 +249,7 @@ public class ProductController {
     ) {
         String prefixQuery = toPrefixTsQuery(q);
         Page<Product> results = prefixQuery.isEmpty()
-                ? productRepository.findAll(buildPageable(page, size, sort))
+                ? findProductsPage(null, page, size, sort)
                 : productRepository.searchByPrefixTsQuery(prefixQuery, PageRequest.of(page, clampPageSize(size)));
         return ResponseEntity.ok(PagedResponse.from(results.map(product -> ProductResponse.from(product, isAdmin))));
     }

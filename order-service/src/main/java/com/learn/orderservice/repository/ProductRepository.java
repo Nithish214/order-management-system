@@ -68,4 +68,30 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             countQuery = "SELECT count(*) FROM product WHERE search_vector @@ to_tsquery('simple', :query)",
             nativeQuery = true)
     Page<Product> searchByPrefixTsQuery(@Param("query") String query, Pageable pageable);
+
+    // "Featured" (see ProductController#findProductsPage) used to be plain id-ascending
+    // order, which meant every visitor saw the exact same handful of products at the top
+    // of page 1, forever -- the catalog's oldest rows, every single visit. This shuffles
+    // instead, but not with a fresh random() per request: that would make page 2 of the
+    // SAME visit unreliable (Postgres re-evaluates random() per row per query, so a
+    // second request's order has no relation to the first's -- a product could vanish
+    // from the list entirely or show up twice across two page loads).
+    // md5(id::text || :daySeed) is deterministic for a given (id, seed) pair, so within
+    // one daySeed value every page request produces the exact same stable order -- pages
+    // stay consistent, nothing repeats or goes missing, exactly like the plain id-order
+    // case above. Passing a different daySeed (the caller uses today's date, see
+    // ProductController) is what actually changes the order at all: same guarantees as
+    // ORDER BY id, just reshuffled once a day instead of frozen forever.
+    @Query(value = "SELECT * FROM product ORDER BY md5(id::text || :daySeed)",
+            countQuery = "SELECT count(*) FROM product",
+            nativeQuery = true)
+    Page<Product> findAllShuffledDaily(@Param("daySeed") String daySeed, Pageable pageable);
+
+    // Same reasoning as findAllShuffledDaily, just scoped to one category -- the
+    // category-filtered equivalent of that method, the same way findByCategory above is
+    // the category-filtered equivalent of findAll.
+    @Query(value = "SELECT * FROM product WHERE category = :category ORDER BY md5(id::text || :daySeed)",
+            countQuery = "SELECT count(*) FROM product WHERE category = :category",
+            nativeQuery = true)
+    Page<Product> findByCategoryShuffledDaily(@Param("category") String category, @Param("daySeed") String daySeed, Pageable pageable);
 }
