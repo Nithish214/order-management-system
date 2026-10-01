@@ -68,6 +68,16 @@ public class Product {
     @Column(name = "video_url", length = 500)
     private String videoUrl;
 
+    // Null until an admin sets one -- a Spotify track/album/playlist share link (the kind
+    // Spotify's own "Share > Copy link" gives you), not a file this app stores anywhere
+    // itself. Just a URL, same "absent means none" shape as videoUrl above, but never
+    // uploaded: ProductController validates it looks like a real open.spotify.com link
+    // and stores it as-is, then ProductDetailPage turns it into an embeddable iframe src
+    // at render time (see utils/spotify.js) -- there's no upload step or S3 object to
+    // manage or clean up, unlike videoUrl/images.
+    @Column(name = "spotify_url", length = 500)
+    private String spotifyUrl;
+
     // Null for any product that's never had one written -- currently every product
     // seeded before the 300-product bulk-generation script (V16) has a real, specific
     // one; the bulk-generated products don't, and ProductDetailPage renders nothing

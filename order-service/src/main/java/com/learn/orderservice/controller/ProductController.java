@@ -6,6 +6,7 @@ import com.learn.orderservice.dto.ImageUploadUrlRequest;
 import com.learn.orderservice.dto.ImageUploadUrlResponse;
 import com.learn.orderservice.dto.PagedResponse;
 import com.learn.orderservice.dto.ProductResponse;
+import com.learn.orderservice.dto.SetProductSpotifyRequest;
 import com.learn.orderservice.dto.SetProductVideoRequest;
 import com.learn.orderservice.dto.VideoUploadUrlRequest;
 import com.learn.orderservice.dto.VideoUploadUrlResponse;
@@ -415,6 +416,33 @@ public class ProductController {
                 .orElseThrow(() -> new EntityNotFoundException("Product not found: " + id));
         productVideoUploadService.deleteIfManaged(product.getVideoUrl());
         product.setVideoUrl(null);
+        return ResponseEntity.ok(ProductResponse.from(product));
+    }
+
+    // Sets (or replaces) this product's Spotify link -- a single PUT, no upload step: the
+    // value is just a URL an admin pastes in, never a file this app stores or has to clean
+    // up on S3 the way the video/image endpoints above do. @Pattern on the request DTO is
+    // the only validation that happens; nothing here calls out to Spotify to confirm the
+    // link is real, same tradeoff a broken/mistyped videoUrl would have.
+    @PutMapping("/{id}/spotify")
+    @Transactional
+    public ResponseEntity<ProductResponse> setProductSpotify(
+            @PathVariable Long id,
+            @Valid @RequestBody SetProductSpotifyRequest request
+    ) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found: " + id));
+        product.setSpotifyUrl(request.getSpotifyUrl());
+        return ResponseEntity.ok(ProductResponse.from(product));
+    }
+
+    // Removes this product's Spotify link entirely, if it has one.
+    @DeleteMapping("/{id}/spotify")
+    @Transactional
+    public ResponseEntity<ProductResponse> deleteProductSpotify(@PathVariable Long id) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found: " + id));
+        product.setSpotifyUrl(null);
         return ResponseEntity.ok(ProductResponse.from(product));
     }
 }

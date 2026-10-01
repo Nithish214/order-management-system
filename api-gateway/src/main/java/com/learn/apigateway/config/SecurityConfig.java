@@ -109,6 +109,11 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/products/*/video-upload-url").hasAuthority("ROLE_admin")
                         .pathMatchers(HttpMethod.PUT, "/products/*/video").hasAuthority("ROLE_admin")
                         .pathMatchers(HttpMethod.DELETE, "/products/*/video").hasAuthority("ROLE_admin")
+                        // Same admin-only reasoning, two rules instead of three -- the
+                        // optional per-product Spotify link (Product#spotifyUrl) is just a
+                        // URL an admin pastes in, no upload-url step to protect.
+                        .pathMatchers(HttpMethod.PUT, "/products/*/spotify").hasAuthority("ROLE_admin")
+                        .pathMatchers(HttpMethod.DELETE, "/products/*/spotify").hasAuthority("ROLE_admin")
                         // Sales/order aggregates for the admin dashboard -- every method, not just
                         // GET, so nothing added under this prefix later is ever accidentally
                         // open to a regular shopper by falling through to the rule below.

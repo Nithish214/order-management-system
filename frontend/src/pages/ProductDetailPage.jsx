@@ -3,7 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { useApiFetch } from "../api/useApiFetch";
 import { addProductImage, deleteProductImage } from "../api/productImages";
 import { setProductVideo, deleteProductVideo } from "../api/productVideos";
+import { setProductSpotify, deleteProductSpotify } from "../api/productSpotify";
 import { getReviews, getReviewEligibility, createReview } from "../api/reviews";
+import { toSpotifyEmbedUrl } from "../utils/spotify";
 import { useCart } from "../cart/CartContext";
 import WishlistToggle from "../wishlist/WishlistToggle";
 import { useCurrency } from "../currency/CurrencyContext";
@@ -75,6 +77,19 @@ export default function ProductDetailPage() {
   const [deletingImageId, setDeletingImageId] = useState(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [deletingVideo, setDeletingVideo] = useState(false);
+  const [spotifyInput, setSpotifyInput] = useState("");
+  const [savingSpotify, setSavingSpotify] = useState(false);
+  const [deletingSpotify, setDeletingSpotify] = useState(false);
+
+  // Pre-filled with whatever's already set, unlike restockInput (which always starts
+  // blank -- restocking adds to a quantity, this replaces a value). Keyed on product.id,
+  // not on `product` itself, so saving a video/image elsewhere on this page (which also
+  // calls setProduct with a new object, same id) doesn't clobber whatever the admin is
+  // mid-typing here.
+  useEffect(() => {
+    setSpotifyInput(product?.spotifyUrl ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id]);
   // Which of this product's images is shown large -- an index rather than an id so it
   // stays meaningful (falls back to the new first image) even right after the currently
   // selected image itself is deleted, see handleDeleteImage.
@@ -318,6 +333,33 @@ export default function ProductDetailPage() {
     }
   }
 
+  async function handleSaveSpotify() {
+    setSavingSpotify(true);
+    setError(null);
+    try {
+      const updated = await setProductSpotify(apiFetch, product.id, spotifyInput.trim());
+      setProduct(updated);
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setSavingSpotify(false);
+    }
+  }
+
+  async function handleRemoveSpotify() {
+    setDeletingSpotify(true);
+    setError(null);
+    try {
+      const updated = await deleteProductSpotify(apiFetch, product.id);
+      setProduct(updated);
+      setSpotifyInput("");
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setDeletingSpotify(false);
+    }
+  }
+
   // Same "adds to whatever's already there" semantics as ProductsPage's restock control --
   // see StockController's comment on why there's no way to just overwrite a quantity.
   async function handleRestock() {
@@ -387,6 +429,7 @@ export default function ProductDetailPage() {
     ...product.images.map((image) => ({ type: "image", key: image.id, id: image.id, url: image.imageUrl })),
     ...(product.videoUrl ? [{ type: "video", key: "video", url: product.videoUrl }] : []),
   ];
+  const spotifyEmbedUrl = toSpotifyEmbedUrl(product.spotifyUrl);
   const selectedItem = galleryItems[selectedImageIndex];
   const removingSelected = selectedItem?.type === "video" ? deletingVideo : deletingImageId === selectedItem?.id;
 
@@ -555,6 +598,26 @@ export default function ProductDetailPage() {
             </div>
           )}
 
+          {/* Visible to everyone, same as the description/specs above -- only rendered at
+              all once there's a real (validated, see SetProductSpotifyRequest) link set.
+              A plain Spotify embed iframe: Spotify's own player, not anything this app
+              builds -- play/pause, volume, and a login prompt for the full track are all
+              Spotify's UI inside that frame, not this page's. */}
+          {spotifyEmbedUrl && (
+            <div className="detail-spotify">
+              <h2>Soundtrack</h2>
+              <iframe
+                title={`${product.name} on Spotify`}
+                src={spotifyEmbedUrl}
+                width="100%"
+                height="152"
+                frameBorder="0"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                loading="lazy"
+              />
+            </div>
+          )}
+
           {isAdmin && (
             <div className="detail-admin">
               <input
@@ -609,6 +672,35 @@ export default function ProductDetailPage() {
                   {restocking ? "Restocking..." : "Restock"}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Its own row, not squeezed into .detail-admin above -- a URL needs real width
+              to read/edit, unlike the fixed-size buttons that row holds. */}
+          {isAdmin && (
+            <div className="detail-admin detail-admin-spotify">
+              <input
+                type="url"
+                placeholder="https://open.spotify.com/track/..."
+                value={spotifyInput}
+                onChange={(e) => setSpotifyInput(e.target.value)}
+                aria-label="Spotify track, album, or playlist link"
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleSaveSpotify}
+                disabled={savingSpotify || spotifyInput.trim() === ""}
+              >
+                {savingSpotify && <Spinner size={14} />}
+                {savingSpotify ? "Saving..." : product.spotifyUrl ? "Update Spotify link" : "Add Spotify link"}
+              </button>
+              {product.spotifyUrl && (
+                <button type="button" className="btn-secondary" onClick={handleRemoveSpotify} disabled={deletingSpotify}>
+                  {deletingSpotify && <Spinner size={14} />}
+                  {deletingSpotify ? "Removing..." : "Remove"}
+                </button>
+              )}
             </div>
           )}
         </div>

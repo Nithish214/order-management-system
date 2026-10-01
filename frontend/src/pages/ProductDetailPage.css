@@ -176,7 +176,8 @@
 }
 
 .detail-description h2,
-.detail-specs h2 {
+.detail-specs h2,
+.detail-spotify h2 {
   font-size: var(--text-lg-size);
   line-height: var(--text-lg-line);
   font-weight: var(--font-weight-semibold);
@@ -231,6 +232,45 @@
   margin-top: var(--space-4);
   padding-top: var(--space-4);
   border-top: var(--border-width) solid var(--color-border);
+}
+
+/* The one optional section shoppers see, not just admins -- Spotify's own embedded
+   player (play/pause, volume, a login prompt for the full track) lives entirely inside
+   the iframe, so this block is just a heading and a frame, no custom controls of ours. */
+.detail-spotify {
+  margin: 0 0 var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.detail-spotify iframe {
+  display: block;
+  border-radius: var(--radius-control);
+}
+
+/* No top border/padding of its own -- sits directly under .detail-admin above as a
+   continuation of the same admin area, not a second separated section. */
+.detail-admin-spotify {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.detail-admin-spotify input {
+  flex: 1;
+  min-width: 220px;
+  padding: var(--space-1) var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-sm-size);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.detail-admin-spotify input:focus {
+  outline: none;
+  border-color: var(--color-accent);
 }
 
 .detail-stock {

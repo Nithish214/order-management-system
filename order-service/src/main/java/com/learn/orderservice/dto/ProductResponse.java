@@ -33,6 +33,9 @@ public class ProductResponse {
     // (see the class's NON_NULL setting above), same "absent means none" convention as
     // sku being redacted, rather than a literal "videoUrl": null.
     private String videoUrl;
+    // Null (omitted from the JSON) for a product with no Spotify link set -- same
+    // convention as videoUrl above. See Product#spotifyUrl.
+    private String spotifyUrl;
     // Null (omitted from the JSON) for a product that's never had one written -- see
     // Product entity's own comment on which products currently do.
     private String description;
@@ -76,6 +79,7 @@ public class ProductResponse {
         response.setCategory(product.getCategory());
         response.setImages(product.getImages().stream().map(ProductImageResponse::from).toList());
         response.setVideoUrl(product.getVideoUrl());
+        response.setSpotifyUrl(product.getSpotifyUrl());
         response.setDescription(product.getDescription());
         response.setSpecs(product.getSpecs());
         return response;
