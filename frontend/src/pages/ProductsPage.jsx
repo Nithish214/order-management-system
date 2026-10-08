@@ -118,6 +118,12 @@ export default function ProductsPage() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const hasActiveSortOrFilter = sort !== "featured" || minPrice !== "" || maxPrice !== "";
+  // Admin-only content-audit filter ("which products still need a demo clip") -- sent to
+  // the backend (see the products effect below), not applied client-side, since the
+  // catalog spans many pages and a client-side filter could only ever check the one page
+  // already on screen. Plain component state, not synced to the URL like selectedCategory
+  // -- this is a one-off admin tool, not a view worth bookmarking/sharing.
+  const [hasVideoFilter, setHasVideoFilter] = useState(false);
 
   useDocumentTitle(debouncedQuery ? `Search: "${debouncedQuery}"` : selectedCategory || "Products");
 
@@ -262,7 +268,7 @@ export default function ProductsPage() {
   // exactly which handler caused it.
   useEffect(() => {
     setPage(0);
-  }, [debouncedQuery, selectedCategory]);
+  }, [debouncedQuery, selectedCategory, hasVideoFilter]);
 
   // Products: re-fetched whenever debouncedQuery, selectedCategory, or page changes. A
   // search takes priority over a category selection when both happen to be set --
@@ -297,6 +303,12 @@ export default function ProductsPage() {
         } else {
           if (selectedCategory) {
             params.set("category", selectedCategory);
+          }
+          // hasVideo only exists on plain GET /products (see ProductController), not
+          // search -- the branch above already means these two are never both relevant
+          // at once, so there's nothing to add on the search path.
+          if (hasVideoFilter) {
+            params.set("hasVideo", "true");
           }
           path = `/products?${params}`;
         }
@@ -338,7 +350,7 @@ export default function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, debouncedQuery, selectedCategory, page, retryCount]);
+  }, [apiFetch, debouncedQuery, selectedCategory, hasVideoFilter, page, retryCount]);
 
   function handleSearchChange(value) {
     setSearchQuery(value);
@@ -359,6 +371,15 @@ export default function ProductsPage() {
     // (category === "") clears the param entirely rather than leaving a stale
     // "?category=" behind.
     setSearchParams(category ? { category } : {});
+  }
+
+  // Same "clears the search box" precedence as handleSelectCategory -- otherwise
+  // checking this while mid-search would silently do nothing (search always wins on the
+  // fetch side, see the effect above), with no indication why.
+  function handleToggleHasVideo(checked) {
+    setHasVideoFilter(checked);
+    setSearchQuery("");
+    setDebouncedQuery("");
   }
 
   if (loading) {
@@ -518,6 +539,22 @@ export default function ProductsPage() {
                 </li>
               ))}
             </ul>
+
+            {/* Admin-only, both because it's an admin task (auditing which products
+                still need a demo clip) and because the value isn't sensitive enough to
+                need server-side gating -- GET /products#hasVideo works for anyone,
+                nothing here is being newly exposed, this is just the one place the
+                control is actually offered. */}
+            {isAdmin && (
+              <label className="category-video-filter">
+                <input
+                  type="checkbox"
+                  checked={hasVideoFilter}
+                  onChange={(e) => handleToggleHasVideo(e.target.checked)}
+                />
+                Has video
+              </label>
+            )}
           </aside>
 
           <section className="product-grid-section">
@@ -531,9 +568,13 @@ export default function ProductsPage() {
               <p className="text-muted">
                 {debouncedQuery
                   ? `No products match "${debouncedQuery}".`
-                  : selectedCategory
-                    ? `No products in ${selectedCategory} right now.`
-                    : "No products available right now."}
+                  : hasVideoFilter
+                    ? selectedCategory
+                      ? `No products with a video in ${selectedCategory} yet.`
+                      : "No products with a video yet."
+                    : selectedCategory
+                      ? `No products in ${selectedCategory} right now.`
+                      : "No products available right now."}
               </p>
             )}
             {!searching && products.length > 0 && visibleProducts.length === 0 && (

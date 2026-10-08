@@ -158,6 +158,20 @@
   flex-direction: column;
 }
 
+/* Admin-only "has video" toggle, directly below the category list it filters alongside --
+   a plain checkbox + label, not styled as a .category-link, since it's a different kind
+   of control (a toggle, not a navigation choice between mutually exclusive views). */
+.category-video-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--color-border);
+  font-size: var(--text-sm-size);
+  color: var(--color-text);
+}
+
 .category-link {
   display: block;
   width: 100%;

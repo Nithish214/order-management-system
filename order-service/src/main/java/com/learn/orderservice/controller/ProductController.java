@@ -112,6 +112,12 @@ public class ProductController {
     @Transactional(readOnly = true)
     public ResponseEntity<PagedResponse<ProductResponse>> getAllProducts(
             @RequestParam(required = false) String category,
+            // Not admin-only to request (nothing sensitive about "does this product have a
+            // video"), just admin-only in the frontend's own UI (ProductsPage only ever
+            // shows the control when isAdmin) -- same split as the category filter, which
+            // isn't admin-gated server-side either despite living in a plain shopper-facing
+            // sidebar. Omitted/false means "no filter," same as category being blank.
+            @RequestParam(required = false) Boolean hasVideo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
             @RequestParam(defaultValue = "featured") String sort,
@@ -121,7 +127,7 @@ public class ProductController {
             // this service, where no gateway ever sets it at all.
             @RequestHeader(value = "X-User-Is-Admin", defaultValue = "false") boolean isAdmin
     ) {
-        Page<Product> results = findProductsPage(category, page, size, sort);
+        Page<Product> results = findProductsPage(category, hasVideo, page, size, sort);
         return ResponseEntity.ok(PagedResponse.from(results.map(product -> ProductResponse.from(product, isAdmin))));
     }
 
@@ -189,8 +195,22 @@ public class ProductController {
     // filter reshuffles independently of the unfiltered list (its own WHERE clause, same
     // daySeed), not a subsequence of it -- there's no requirement that they agree with
     // each other, only that each stays internally consistent for the rest of the day.
-    private Page<Product> findProductsPage(String category, int page, int size, String sort) {
+    private Page<Product> findProductsPage(String category, Boolean hasVideo, int page, int size, String sort) {
         boolean hasCategory = category != null && !category.isBlank();
+
+        // hasVideo is an admin content-audit filter ("which products still need a demo
+        // clip"), not part of the customer discovery experience -- it skips the whole
+        // featured/shuffle machinery below and just uses a plain stable order (whichever
+        // named sort was asked for, or id-ascending -- resolveSort's own fallback -- for
+        // "featured"/anything else). Simpler than teaching the shuffled queries a third
+        // independent filter dimension for a path shoppers never take.
+        if (Boolean.TRUE.equals(hasVideo)) {
+            Pageable pageable = buildPageable(page, size, sort);
+            return hasCategory
+                    ? productRepository.findByCategoryAndVideoUrlIsNotNull(category, pageable)
+                    : productRepository.findByVideoUrlIsNotNull(pageable);
+        }
+
         if (NAMED_SORTS.contains(sort)) {
             Pageable pageable = buildPageable(page, size, sort);
             return hasCategory
@@ -250,7 +270,7 @@ public class ProductController {
     ) {
         String prefixQuery = toPrefixTsQuery(q);
         Page<Product> results = prefixQuery.isEmpty()
-                ? findProductsPage(null, page, size, sort)
+                ? findProductsPage(null, null, page, size, sort)
                 : productRepository.searchByPrefixTsQuery(prefixQuery, PageRequest.of(page, clampPageSize(size)));
         return ResponseEntity.ok(PagedResponse.from(results.map(product -> ProductResponse.from(product, isAdmin))));
     }

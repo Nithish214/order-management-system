@@ -22,6 +22,15 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     // derived query method like this one, same as it derives the main query.
     Page<Product> findByCategory(String category, Pageable pageable);
 
+    // Backs the admin "has video" filter on the product grid (see
+    // ProductController#findProductsPage) -- another plain derived query method, same
+    // reasoning as findByCategory above. IsNotNull, not a boolean flag: Product#videoUrl
+    // is already the single source of truth for "does this product have a video," so
+    // there's nothing to keep in sync by adding a second column that could drift from it.
+    Page<Product> findByVideoUrlIsNotNull(Pageable pageable);
+
+    Page<Product> findByCategoryAndVideoUrlIsNotNull(String category, Pageable pageable);
+
     // JPQL's `new` constructor-expression syntax -- builds a CategoryResponse directly
     // from the aggregated query results, rather than fetching plain Object[] rows (JPA's
     // usual fallback for a query the entity itself doesn't shape) and mapping them by hand
