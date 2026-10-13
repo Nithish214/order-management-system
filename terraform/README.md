@@ -8,20 +8,22 @@ living only in whoever's memory set it up.
 
 ## What's covered so far
 
-Just the EC2 instance and everything it directly needs to run as itself:
+The EC2 instance and RDS database -- the two things actually running the app -- and
+everything each directly needs:
 
 | File | What it describes |
 |---|---|
 | `ec2.tf` | The one EC2 instance running every backend service via Docker Compose |
 | `security-groups.tf` | Its security group (`launch-wizard-1`) and the default VPC/subnet it sits in |
 | `iam.tf` | Its IAM role, instance profile, the AWS-managed CloudWatch policy attachment, and its three inline policies (SES send, product-image/video S3 upload) |
+| `rds.tf` | The Postgres database, its own security group (`rds-postgres-sg`, referencing the EC2 security group above by id, matching the live inbound rule exactly), and the account's default DB subnet group/parameter group it uses |
 
-**Not yet covered** (each would be its own slice, imported the same way): RDS, the
-frontend S3 bucket, both CloudFront distributions, Cognito, the two Lambdas
-(`ec2-rds-monitor`, `rds-idle-auto-stop`) and their API Gateway, ACM, and the Porkbun/
-Route 53 DNS records. `nithishnarravula-resume-site` and `resume-website-api-dev-*`
-(the OTHER project's resources) are deliberately out of scope entirely -- this is the
-order-management-system's own Terraform, not an inventory of the whole AWS account.
+**Not yet covered** (each would be its own slice, imported the same way): the frontend S3
+bucket, both CloudFront distributions, Cognito, the two Lambdas (`ec2-rds-monitor`,
+`rds-idle-auto-stop`) and their API Gateway, ACM, and the Porkbun/Route 53 DNS records.
+`nithishnarravula-resume-site` and `resume-website-api-dev-*` (the OTHER project's
+resources) are deliberately out of scope entirely -- this is the order-management-system's
+own Terraform, not an inventory of the whole AWS account.
 
 ## State
 
@@ -79,6 +81,24 @@ the next one:
   **before the base import is clean.** It turns every single resource's first plan into
   "wants to add a tag," which buries the one diff that actually matters (a real
   mismatch) in noise that doesn't.
+- **A sensitive attribute AWS never returns (e.g. `aws_db_instance.password`) can't be
+  imported, full stop** -- don't invent a placeholder value for it (actively misleading
+  in a public repo) or make it Required. Leave it out of the resource block entirely and
+  `lifecycle { ignore_changes = [password] }`; the real password still changes the
+  normal way (the AWS console/CLI), just never through this file.
+- **Not every AWS object has a matching Terraform data source**, even read-only ones --
+  `aws_db_option_group` only exists as a managed *resource* in this provider, not a data
+  source. For an Optional+Computed attribute (`option_group_name` here), the fix is
+  simpler than it looks: just leave it out of the config entirely. Terraform keeps
+  whatever import already put in state instead of trying to null it out.
+- **A pending change isn't automatically a problem.** Importing `aws_db_instance`
+  surfaced `skip_final_snapshot = true -> false` -- true was never AWS's value (this
+  attribute has no AWS-side equivalent at all, same category as
+  `revoke_rules_on_delete`), it was just the provider's placeholder on import.
+  `terraform apply` for a diff entirely in that category never touches the real
+  resource -- confirmed here with `DBInstanceStatus` read before and after (still
+  `stopped`, untouched) and Terraform's own `Modifications complete after 0s`, too fast
+  to have been a real RDS API call.
 
 ## Running it
 
