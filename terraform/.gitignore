@@ -1,0 +1,17 @@
+# Contains resource IDs and, depending on what's imported later, could contain
+# sensitive attribute values (e.g. an RDS password if one is ever read back into state)
+# -- never committed, same reasoning as every other *.env/credentials file in this repo.
+*.tfstate
+*.tfstate.*
+.terraform/
+# .terraform.lock.hcl is deliberately NOT ignored -- same reasoning as package-lock.json,
+# it pins exact provider versions and should be committed.
+
+# Real values (including the two personal SSH-source IPs -- this repo is public, see
+# security-groups.tf's own comment) -- terraform.tfvars.example is the committed,
+# secret-free template.
+terraform.tfvars
+*.auto.tfvars
+
+crash.log
+crash.*.log

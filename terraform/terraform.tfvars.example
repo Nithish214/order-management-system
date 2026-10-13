@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (gitignored -- never commit the copy) and fill in real values.
+# See variables.tf for what each one is and why it's not just a default there.
+
+ssh_allowed_cidrs = [
+  "203.0.113.10/32", # example -- replace with your real current IP(s)
+]
