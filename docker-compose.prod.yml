@@ -203,12 +203,17 @@ services:
     depends_on:
       - order-service
       - inventory-service
+      - payment-service
       - redis
     environment:
       # Docker Compose service names resolve via its embedded DNS -- this is what makes
       # "order-service" a valid hostname here, unlike on your local machine.
       ORDER_SERVICE_URL: http://order-service:8081
       INVENTORY_SERVICE_URL: http://inventory-service:8082
+      # Not used for routing (payment-service has no Gateway route at all -- it's reached
+      # only via Kafka) -- this is for SystemHealthSampler's polling loop, the one place
+      # the Gateway talks to it directly over HTTP.
+      PAYMENT_SERVICE_URL: http://payment-service:8083
       # Backs the order-creation rate limiter's token-bucket counters (RequestRateLimiter
       # filter, application.yml) -- the same Redis instance inventory-service already
       # caches against, not a second one.

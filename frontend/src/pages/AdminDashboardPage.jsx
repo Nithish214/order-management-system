@@ -9,6 +9,7 @@ import Skeleton from "../components/Skeleton";
 import StarRating from "../components/StarRating";
 import BarList from "../components/charts/BarList";
 import ColumnChart from "../components/charts/ColumnChart";
+import SystemHealthPanel from "../components/SystemHealthPanel";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "./AdminDashboardPage.css";
 
@@ -187,6 +188,13 @@ export default function AdminDashboardPage() {
           </div>
         </div>
         {error && <p className="text-error">{error}</p>}
+
+        {/* Live infrastructure status, ahead of the business metrics below it on
+            purpose -- "is everything actually running" is the thing worth knowing
+            first, especially on a visit prompted by something looking wrong. Polls on
+            its own independent cycle (see the component itself), not tied to this
+            page's own load/Refresh-button cycle above. */}
+        <SystemHealthPanel />
 
         <div className="stat-grid">
           <StatTile

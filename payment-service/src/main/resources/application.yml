@@ -52,3 +52,13 @@ logging:
   pattern:
     # Same idiom as Order Service's identical addition -- see that file's comment.
     level: "%5p [%X{correlationId:-}]"
+
+# Same reasoning as Order Service's identical addition -- see that file's comment.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: always

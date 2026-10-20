@@ -118,6 +118,11 @@ public class SecurityConfig {
                         // GET, so nothing added under this prefix later is ever accidentally
                         // open to a regular shopper by falling through to the rule below.
                         .pathMatchers("/analytics/**").hasAuthority("ROLE_admin")
+                        // Live per-service health/request-rate (SystemHealthController) -- unlike
+                        // /health/services above (plain three-way UP/DOWN, permitAll for the
+                        // Docker healthcheck/CloudSwitch app), this exposes each service's full
+                        // Actuator health component detail, which isn't shopper-facing information.
+                        .pathMatchers("/system/health").hasAuthority("ROLE_admin")
                         // A user's OWN profile and address book -- /users/me and everything under
                         // it. Any signed-in user, since each of those endpoints derives whose data
                         // it is from the caller's own token (X-User-Sub), never from the URL.

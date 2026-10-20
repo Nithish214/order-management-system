@@ -1,0 +1,91 @@
+.system-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-3);
+}
+
+.system-health-card {
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.system-health-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.system-health-card-header h3 {
+  margin: 0;
+  font-size: var(--text-base-size);
+  line-height: var(--text-base-line);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Same subtle-tint + solid-text pairing as StatusBadge's own up/down-shaped pair
+   (success/error) -- UP and DOWN are exactly that kind of judgment, just about a
+   service instead of an order. */
+.system-health-status {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  font-size: var(--text-xs-size);
+  line-height: var(--text-xs-line);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.system-health-status--up {
+  background: var(--color-success-subtle);
+  color: var(--color-success);
+}
+
+.system-health-status--down {
+  background: var(--color-error-subtle);
+  color: var(--color-error);
+}
+
+/* Inline next to a component name rather than its own row -- a smaller, quieter
+   treatment than the card-level badge above, since there can be several of these per
+   card (db, diskSpace, ping, redis, ...). */
+.system-health-status--small {
+  margin-left: var(--space-2);
+  padding: 0 var(--space-1);
+}
+
+.system-health-rps {
+  margin: 0 0 var(--space-3);
+}
+
+.system-health-rps strong {
+  font-size: var(--text-lg-size);
+  line-height: var(--text-lg-line);
+}
+
+.system-health-components {
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.system-health-component {
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+}
+
+.system-health-component dt {
+  display: flex;
+  align-items: center;
+  font-weight: var(--font-weight-semibold);
+}
+
+.system-health-component dd {
+  margin: 0;
+  color: var(--color-text-muted);
+  /* Several "key: value" pairs joined onto one line (see SystemHealthPanel.jsx) can run
+     long (diskSpace's full path, say) -- wraps rather than overflowing the card. */
+  overflow-wrap: break-word;
+}

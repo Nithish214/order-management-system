@@ -64,6 +64,20 @@ products:
 notifications:
   from-email: ${NOTIFICATIONS_FROM_EMAIL:}
 
+# health,metrics -- not just the bare /actuator/health the Docker healthcheck already
+# used. Safe to open up this wide here specifically because this service's own port
+# never reaches the public internet at all (see this class's own comment on that trust
+# model) -- only api-gateway, inside the same Docker network, actually calls these, to
+# back its admin-only system-health dashboard (SystemHealthController).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: always
+
 logging:
   level:
     org.hibernate.SQL: INFO
