@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -114,6 +115,26 @@ public class SystemHealthSampler {
                 .retrieve().bodyToMono(JsonNode.class)
                 .timeout(Duration.ofSeconds(3))
                 .map(SystemHealthSampler::extractCount)
+                // A 404 here is a real, valid reading -- "zero requests recorded yet" --
+                // not a failure, for a service that never receives any HTTP traffic other
+                // than this very sampler's own /actuator/** calls (payment-service: no
+                // Gateway route at all, reached only via Kafka). Those calls are the
+                // exact thing excluded from this metric (see MetricsConfig), so its
+                // http.server.requests timer has zero non-denied samples -- the metric
+                // NAME is still pre-registered (shows up in the bare /actuator/metrics
+                // listing) but the detail query 404s until something records a real
+                // sample against it. Recording that as count=0 here, not skipping the
+                // tick, is what makes this service's chart show an honest flat zero
+                // line instead of staying permanently blank.
+                //
+                // Any OTHER failure (connection refused, timeout, a real 5xx) still
+                // falls through to onErrorResume below and skips the tick entirely --
+                // treating THOSE as count=0 would reset the baseline, so a service that
+                // comes back after a genuine outage would compute its rate against zero
+                // and report one enormous, wrong spike for its first recovered sample.
+                .onErrorResume(
+                        e -> e instanceof WebClientResponseException wcre && wcre.getStatusCode().value() == 404,
+                        e -> Mono.just(0.0))
                 .onErrorResume(e -> Mono.empty())
                 .subscribe(count -> recordSample(tracker, count));
     }
