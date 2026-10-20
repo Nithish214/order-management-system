@@ -202,3 +202,16 @@ logging:
   level:
     org.springframework.cloud.gateway: INFO
     org.springframework.security: INFO
+
+# metrics (not just the bare /actuator/health this already had) -- admin-gated via
+# SecurityConfig (unlike /actuator/health, which stays permitAll for the Docker
+# healthcheck), not left at the default "health only" exposure. This service's own
+# request-rate reading already comes from an in-process MeterRegistry read
+# (SystemHealthSampler#sampleSelf), not this HTTP endpoint -- exposing it here is for
+# direct operator visibility/debugging (confirming exactly which URIs are and aren't
+# being recorded, tag by tag) when the summed number alone isn't enough to tell.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics

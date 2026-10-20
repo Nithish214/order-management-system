@@ -67,6 +67,13 @@ public class SecurityConfig {
                         // the healthcheck would get a 401 and the Gateway would look permanently
                         // unhealthy regardless of whether it's actually fine.
                         .pathMatchers("/actuator/health").permitAll()
+                        // Everything else under /actuator (metrics -- see application.yml's
+                        // exposure.include) is real operational detail, not something the
+                        // Docker healthcheck or anyone unauthenticated needs -- admin-only,
+                        // same reasoning as /system/health below, which this actually backs
+                        // (direct tag-level visibility into the same request metric
+                        // SystemHealthSampler reads in-process).
+                        .pathMatchers("/actuator/**").hasAuthority("ROLE_admin")
                         // Same reasoning as /actuator/health above: the EC2/RDS monitor app
                         // calls this directly to show per-container status, with no Cognito
                         // login of its own (it authenticates to its own Lambda backend via a
