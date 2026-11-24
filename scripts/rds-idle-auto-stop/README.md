@@ -4,17 +4,41 @@ A small scheduled Lambda that stops the project's RDS instance
 (`order-management-db`, `eu-west-1`) once nobody's actually **visited the site for 7
 days straight** — pure cost automation, nothing about the app itself changes.
 
-## Why CloudFront requests, not RDS connections
+## Why api-gateway's own traffic count, not RDS connections or CloudFront requests
 
-The obvious first signal to use was RDS's own `DatabaseConnections` metric -- and it's
-wrong, found by actually reasoning through what else touches this database. It's never
-genuinely zero while the backend is running, regardless of real visitors:
-`docker-compose.prod.yml`'s healthchecks hit `order-service`/`inventory-service`'s
-`/actuator/health` roughly every 30 seconds, which pings the database as part of that
-check, and HikariCP (Spring Boot's connection pool) keeps several idle connections open
-per service the whole time it's running anyway. So this instead checks the CloudFront
-distribution's own `Requests` metric -- nonzero only because an actual browser asked for
-the actual site, independent of whatever the backend does to itself in the background.
+Third design for this signal, not the first or second:
+
+1. RDS's own `DatabaseConnections` metric was the original design. Wrong -- never
+   genuinely zero while the backend is running, regardless of real visitors:
+   `docker-compose.prod.yml`'s healthchecks hit `order-service`/`inventory-service`'s
+   `/actuator/health` roughly every 30 seconds, which pings the database as part of
+   that check, and HikariCP (Spring Boot's connection pool) keeps several idle
+   connections open per service the whole time it's running anyway.
+2. CloudFront's `Requests` metric fixed that, but has its own blind spot: it counts
+   every edge hit, including search/SEO crawlers and vulnerability scanners that fetch
+   the SPA's static HTML/JS shell but never execute it. Filtering those by User-Agent
+   keyword (against CloudFront's own access logs) was the next attempt -- and *that*
+   turned out to be defeated by the exact traffic it targeted: real log samples showed
+   datacenter IPs hitting `/` cold, no referer, with a User-Agent deliberately spoofed
+   to look like a real Chrome/Windows browser specifically to blend past keyword
+   filters. A blocklist can't win that game.
+3. This version gives up on anything CloudFront-edge-visible (IP, UA, referer -- all
+   spoofable) and instead reads `GET /system/traffic-count` on api-gateway -- a
+   deliberately public, single-number endpoint backed by
+   `SystemHealthSampler#currentRealTrafficCount`, counting only order-service's and
+   inventory-service's own (monitoring-excluded) request totals. A scanner that only
+   fetches static HTML never executes the SPA's React code, so it never calls this
+   backend at all, no matter how convincing its headers look -- this is a signal bots
+   are structurally incapable of faking, not one they merely haven't bothered to fake
+   yet.
+
+That count is cumulative since the gateway's last restart and this Lambda only runs
+once a day, so rather than reconstruct a sliding 7-day window, it tracks a
+consecutive-idle-days streak in S3 (`idle-tracker/state.json` in the same bucket this
+folder's earlier CloudFront-logging attempt used -- logging on the distribution is now
+turned back off, since it's no longer read by anything): each day the count hasn't
+moved since the last check, the streak goes up by one; any movement resets it to zero.
+Reaching `IDLE_DAYS` consecutive no-movement days is what triggers the stop.
 
 ## Why a Lambda, not just "stop it and leave it"
 
@@ -46,10 +70,18 @@ has no way to know "someone's about to visit" ahead of the request that needs it
 - `trust-policy.json` — lets the Lambda service assume this function's execution role.
 - `permissions-policy.json` — least-privilege: `DescribeDBInstances` (needs `*`, RDS
   doesn't support resource-level permission on Describe calls), `StopDBInstance`
-  scoped to this one instance's ARN only, `cloudwatch:GetMetricStatistics` (needs `*`
-  too -- covers both the eu-west-1 RDS calls and the us-east-1 CloudFront call, since
-  IAM permissions aren't region-scoped by the policy itself), and the standard `logs:*`
-  trio scoped to this function's own log group.
+  scoped to this one instance's ARN only, `s3:GetObject`/`s3:PutObject` scoped to just
+  the `idle-tracker/*` key (the streak-tracking state file), and the standard `logs:*`
+  trio scoped to this function's own log group. Notably does NOT need any CloudFront
+  or EC2 permission -- `GET /system/traffic-count` is a plain public HTTPS call, not an
+  AWS API call.
+
+## Depends on
+
+`api-gateway`'s `GET /system/traffic-count` (`SystemHealthController`) must actually be
+deployed and reachable at `TRAFFIC_COUNT_URL` for this to work -- until then, every
+daily run logs a fetch failure and safely no-ops (leaves RDS up, touches no state)
+rather than guessing.
 
 ## How it was deployed
 
@@ -73,7 +105,7 @@ aws lambda create-function \
   --handler lambda_function.lambda_handler \
   --zip-file fileb://lambda.zip \
   --timeout 30 \
-  --environment "Variables={DB_INSTANCE_ID=order-management-db,IDLE_DAYS=7,DISTRIBUTION_ID=E1MH9X3BUX6CH5}" \
+  --environment "Variables={DB_INSTANCE_ID=order-management-db,IDLE_DAYS=7,TRAFFIC_COUNT_URL=https://shop-api.nithishnarravula.dev/system/traffic-count,STATE_BUCKET=order-management-cf-logs-244689414185,STATE_KEY=idle-tracker/state.json}" \
   --region eu-west-1
 
 # Daily trigger, 3am UTC
@@ -111,7 +143,7 @@ aws iam delete-role --role-name rds-idle-auto-stop-role
 ```bash
 aws lambda update-function-configuration \
   --function-name rds-idle-auto-stop \
-  --environment "Variables={DB_INSTANCE_ID=order-management-db,IDLE_DAYS=14,DISTRIBUTION_ID=E1MH9X3BUX6CH5}" \
+  --environment "Variables={DB_INSTANCE_ID=order-management-db,IDLE_DAYS=14,TRAFFIC_COUNT_URL=https://shop-api.nithishnarravula.dev/system/traffic-count,STATE_BUCKET=order-management-cf-logs-244689414185,STATE_KEY=idle-tracker/state.json}" \
   --region eu-west-1
 ```
 

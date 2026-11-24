@@ -8,16 +8,22 @@
       "Resource": "*"
     },
     {
+      "Sid": "DescribeAnyEc2Instance",
+      "Effect": "Allow",
+      "Action": "ec2:DescribeInstances",
+      "Resource": "*"
+    },
+    {
       "Sid": "StopThisOneInstanceOnly",
       "Effect": "Allow",
       "Action": "rds:StopDBInstance",
       "Resource": "arn:aws:rds:eu-west-1:244689414185:db:order-management-db"
     },
     {
-      "Sid": "ReadItsConnectionMetric",
+      "Sid": "ReadWriteIdleTrackerState",
       "Effect": "Allow",
-      "Action": "cloudwatch:GetMetricStatistics",
-      "Resource": "*"
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::order-management-cf-logs-244689414185/idle-tracker/*"
     },
     {
       "Sid": "OwnLambdaLogs",
