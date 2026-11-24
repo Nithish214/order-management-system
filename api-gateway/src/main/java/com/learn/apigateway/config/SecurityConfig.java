@@ -79,6 +79,12 @@ public class SecurityConfig {
                         // login of its own (it authenticates to its own Lambda backend via a
                         // separate API key, not this app's user accounts).
                         .pathMatchers("/health/services").permitAll()
+                        // rds-idle-auto-stop's Lambda has no Cognito credentials and reads this
+                        // directly -- permitAll is safe here specifically because the endpoint
+                        // itself exposes nothing but one bare derived number (see
+                        // SystemHealthController#trafficCount), not the full detail /system/health
+                        // below is gated for.
+                        .pathMatchers("/system/traffic-count").permitAll()
                         // Login has no token yet by definition; refresh only ever has the httpOnly
                         // cookie (no Bearer token); logout must still work against an
                         // already-expired access token. google/callback is the same "no token yet"

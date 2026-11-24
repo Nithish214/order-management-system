@@ -24,4 +24,16 @@ public class SystemHealthController {
     public ResponseEntity<List<ServiceHealthSnapshot>> systemHealth() {
         return ResponseEntity.ok(sampler.currentSnapshots());
     }
+
+    // Deliberately public (see SecurityConfig) and deliberately just one bare number --
+    // everything else this class exposes is admin-only operational detail, but
+    // rds-idle-auto-stop's Lambda has no Cognito credentials of its own and needs to
+    // read this unauthenticated. The number itself carries no sensitive information
+    // (not even which service it came from), only "has anyone used the app" -- see
+    // SystemHealthSampler#currentRealTrafficCount for why this specific count is the
+    // one signal bots can't fake.
+    @GetMapping("/system/traffic-count")
+    public ResponseEntity<Double> trafficCount() {
+        return ResponseEntity.ok(sampler.currentRealTrafficCount());
+    }
 }

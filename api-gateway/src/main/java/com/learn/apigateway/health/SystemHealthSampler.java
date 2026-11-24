@@ -17,6 +17,7 @@ import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 // Polls every backend service's own Actuator endpoints every 5s and keeps a short rolling
@@ -199,6 +200,27 @@ public class SystemHealthSampler {
                 tracker.history.removeFirst();
             }
         }
+    }
+
+    // Backs the public GET /system/traffic-count (SystemHealthController) -- the one
+    // signal rds-idle-auto-stop's Lambda now trusts to decide whether anyone's really
+    // using the app. Deliberately order-service + inventory-service only, not
+    // api-gateway or payment-service: these two are the services a real visit actually
+    // calls (products, cart, users, stock), and a request only ever reaches them by the
+    // SPA's own JS executing and making that call -- a scanner/bot that just fetches
+    // CloudFront's static HTML with a spoofed browser User-Agent (see the CloudFront-log
+    // attempt this replaced) never runs that JS, so it can never move this number,
+    // regardless of how convincing its headers look. Each service's own count already
+    // excludes its own /actuator/** noise (see each service's MetricsConfig), same
+    // "ignore the monitoring, not the usage" filtering SystemHealthSampler itself relies
+    // on elsewhere.
+    public double currentRealTrafficCount() {
+        return trackers.entrySet().stream()
+                .filter(entry -> entry.getKey().equals("order-service") || entry.getKey().equals("inventory-service"))
+                .map(entry -> entry.getValue().previousCount)
+                .filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .sum();
     }
 
     // Read by SystemHealthController on every GET /system/health -- a snapshot copy, not
