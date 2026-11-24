@@ -26,6 +26,15 @@
       "Resource": "arn:aws:s3:::order-management-cf-logs-244689414185/idle-tracker/*"
     },
     {
+      "Sid": "ListBucketForIdleTrackerState",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::order-management-cf-logs-244689414185",
+      "Condition": {
+        "StringLike": { "s3:prefix": "idle-tracker/*" }
+      }
+    },
+    {
       "Sid": "OwnLambdaLogs",
       "Effect": "Allow",
       "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
